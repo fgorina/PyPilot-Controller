@@ -21,6 +21,24 @@ typedef unsigned long age_t;
     FOLLOW_ROUTE = 1
   } ap_cmd_type_e;
 
+  typedef enum {
+    TACKING_TO_PORT = -1,
+    TACKING_TO_STARBOARD = 1
+  } ap_tack_direction_e;
+
+  typedef enum {
+    TACK_NONE = 0,
+    TACK_BEGIN = 1,
+    TACK_WAITING = 2,
+    TACK_TACKING = 3
+  }ap_tack_state_e;
+
+typedef struct _ap_tack_t {
+    ap_tack_state_e st;
+    ap_tack_direction_e direction;
+    age_t age = 0U;
+  } ap_tack_t;
+
 typedef struct _ap_state_t {
     ap_state_e st;
     age_t age = 0U;
@@ -30,6 +48,11 @@ typedef struct _voltage_V_t {
     float volt;
     age_t age = 0U;
   } voltage_V_t;
+
+typedef struct _servo_position_t {
+    float deg = 0.0;
+    age_t age = 0U;
+  } _servo_position_t;
 
 
 typedef struct _amp_hr_t {
@@ -79,6 +102,7 @@ typedef struct _amp_hr_t {
     struct _voltage_V_t voltage;
     struct _deg_C_t controller_temp;
     struct _amp_hr_t amp_hr;
+    struct _servo_position_t position;
   } ap_servo_t;
 
 typedef struct _autopilot_t {
@@ -88,6 +112,7 @@ typedef struct _autopilot_t {
     struct _ap_cmd_type_t command_type;
     struct _ap_mode_t ap_mode;
     struct _ap_servo_t ap_servo;
+    struct _ap_tack_t tack;
   } autopilot_t;
 
 

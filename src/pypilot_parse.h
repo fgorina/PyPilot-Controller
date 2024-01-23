@@ -19,13 +19,13 @@ extern "C" {
         shipDataModel.steering.autopilot.heading.deg =
           strtof(dataFeed.substring(strlen("ap.heading="), dataFeed.length()).c_str(), NULL);
         shipDataModel.steering.autopilot.heading.age = millis();
-        redraw = redraw || fabs(oldHeading - shipDataModel.steering.autopilot.heading.deg) >= 1.0;
+        redraw = redraw || (fabs(oldHeading - shipDataModel.steering.autopilot.heading.deg) >= 0.5 && (shipDataModel.steering.autopilot.ap_state.st == ap_state_e::ENGAGED || rudderMode)) ;
       } else if (dataFeed.startsWith("ap.heading_command=")) {
         float oldCommand = shipDataModel.steering.autopilot.heading.deg;
         shipDataModel.steering.autopilot.command.deg =
-          strtof(dataFeed.substring(strlen("ap.heading_command="), dataFeed.length()).c_str(), NULL);
+        strtof(dataFeed.substring(strlen("ap.heading_command="), dataFeed.length()).c_str(), NULL);
         shipDataModel.steering.autopilot.command.age = millis();
-        redraw = redraw || fabs(oldCommand - shipDataModel.steering.autopilot.command.deg) >= 1.0;
+        redraw = redraw || (fabs(oldCommand - shipDataModel.steering.autopilot.command.deg) >= 0.5 && shipDataModel.steering.autopilot.ap_state.st == ap_state_e::ENGAGED);
       } else if (dataFeed.startsWith("ap.enabled=true")) {
         ap_state_e oldState = shipDataModel.steering.autopilot.ap_state.st;
         shipDataModel.steering.autopilot.ap_state.st = ap_state_e::ENGAGED;
@@ -36,9 +36,39 @@ extern "C" {
         shipDataModel.steering.autopilot.ap_state.st = ap_state_e::STANDBY; 
         shipDataModel.steering.autopilot.ap_state.age = millis();
         redraw = redraw || (oldState != shipDataModel.steering.autopilot.ap_state.st);
-      } else if (dataFeed.startsWith("ap.mode=\"")) {
+      } else if (dataFeed.startsWith("ap.tack.state=\"")) {
+        ap_tack_state_e oldState = shipDataModel.steering.autopilot.tack.st;
+
+        String state = dataFeed.substring(strlen("ap.tack.state=\""), dataFeed.length() - 1);
+        shipDataModel.steering.autopilot.tack.st = ap_tack_state_e::TACK_NONE;
+        shipDataModel.steering.autopilot.tack.age = millis();
+
+        if(state == "begin"){
+          shipDataModel.steering.autopilot.tack.st = ap_tack_state_e::TACK_BEGIN;
+        }else if (state == "waiting"){
+          shipDataModel.steering.autopilot.tack.st = ap_tack_state_e::TACK_WAITING;
+        }else if (state == "tacking"){
+          shipDataModel.steering.autopilot.tack.st = ap_tack_state_e::TACK_TACKING;
+        }
+        USBSerial.print("Tack State "); USBSerial.print(shipDataModel.steering.autopilot.tack.st); USBSerial.print(" "); USBSerial.println(state);
+        redraw = redraw || (oldState != shipDataModel.steering.autopilot.tack.st);
+        
+      }else if (dataFeed.startsWith("ap.tack.direction=\"")) {
+        ap_tack_direction_e oldDirection = shipDataModel.steering.autopilot.tack.direction;
+        String direction = dataFeed.substring(strlen("ap.tack.direction=\""), dataFeed.length() - 1);
+        shipDataModel.steering.autopilot.tack.direction = ap_tack_direction_e::TACKING_TO_PORT;
+        shipDataModel.steering.autopilot.tack.age = millis();
+
+        if(direction == "starboard"){
+          shipDataModel.steering.autopilot.tack.direction = ap_tack_direction_e::TACKING_TO_STARBOARD;
+        }
+        //USBSerial.print("Tack Direction "); USBSerial.print(shipDataModel.steering.autopilot.tack.direction); USBSerial.print(" ");USBSerial.println(direction);
+        redraw = redraw || (oldDirection != shipDataModel.steering.autopilot.tack.direction);
+
+      }else if (dataFeed.startsWith("ap.mode=\"")) {
         ap_mode_e oldMode = shipDataModel.steering.autopilot.ap_mode.mode;
         String mode = dataFeed.substring(strlen("ap.mode=\""), dataFeed.length() - 1);
+        USBSerial.print("Received "); USBSerial.println(mode);
         shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::MODE_NA;
         shipDataModel.steering.autopilot.ap_mode.age = millis();
         if (mode == "gps") {
@@ -63,7 +93,19 @@ extern "C" {
         shipDataModel.steering.autopilot.ap_servo.controller_temp.deg_C =
           strtof(dataFeed.substring(strlen("servo.controller_temp="), dataFeed.length()).c_str(), NULL);
         shipDataModel.steering.autopilot.ap_servo.controller_temp.age = millis();
-      } else {
+      } else if (dataFeed.startsWith("servo.position=")) {
+        float oldServoPos = shipDataModel.steering.autopilot.ap_servo.position.deg;
+        shipDataModel.steering.autopilot.ap_servo.position.deg =
+          strtof(dataFeed.substring(strlen("servo.position="), dataFeed.length()).c_str(), NULL);
+        shipDataModel.steering.autopilot.ap_servo.position.age = millis();
+        redraw = redraw ||  rudderMode;
+        // Because it seems servo.position_command does not work
+
+        if(rudderMode && updateRudder){
+          sendRudderCommand();
+        }
+        
+      }else {
         found = false;
       }      
     }
