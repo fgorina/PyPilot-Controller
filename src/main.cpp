@@ -561,6 +561,11 @@ bool doNavigation()
     {
       selectingMode = !selectingMode;
       doRedraw = true;
+    } else {
+      edit_heading = shipDataModel.steering.autopilot.heading.deg;
+      commitSteering(0);
+      doRedraw = true;
+    
     }
   }
 
@@ -592,7 +597,7 @@ bool doNavigation()
       doRedraw = true;
     }
     aboutToTackState = ABOUT_TO_TACK_NONE;
-  }
+   }
 
   if (t.state != T_NONE)
   {
@@ -654,6 +659,8 @@ bool doStandby()
         oldPosition = M5Dial.Encoder.read();
         pypilot_send_engage(pypClient.c);
         pypilot_send_mode(pypClient.c, AP_MODE_COMPASS);
+        edit_heading = shipDataModel.steering.autopilot.heading.deg;
+        commitSteering(0);
         shipDataModel.steering.autopilot.ap_state.st = ap_state_e::ENGAGED; // Send  data to pypilot
         shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::HEADING_MAG;
         selectedOption = 0;
@@ -664,6 +671,8 @@ bool doStandby()
         oldPosition = M5Dial.Encoder.read();
         pypilot_send_engage(pypClient.c);
         pypilot_send_mode(pypClient.c, AP_MODE_GPS);
+        edit_heading = shipDataModel.steering.autopilot.heading.deg;
+        commitSteering(0);
         shipDataModel.steering.autopilot.ap_state.st = ap_state_e::ENGAGED; // Send  data to pypilot
         shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::COG_TRUE;
         selectedOption = 1;
@@ -676,6 +685,8 @@ bool doStandby()
         USBSerial.println("Selected True Wind");
         pypilot_send_engage(pypClient.c);
         pypilot_send_mode(pypClient.c, AP_MODE_WIND_TRUE);
+        edit_heading = shipDataModel.steering.autopilot.heading.deg;
+        commitSteering(0);
         shipDataModel.steering.autopilot.ap_state.st = ap_state_e::ENGAGED; // Send  data to pypilot
         shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::TRUE_WIND;
         selectedOption = 3;
@@ -686,6 +697,8 @@ bool doStandby()
         oldPosition = M5Dial.Encoder.read();
         pypilot_send_engage(pypClient.c);
         pypilot_send_mode(pypClient.c, AP_MODE_WIND);
+        edit_heading = shipDataModel.steering.autopilot.heading.deg;
+        commitSteering(0);
         shipDataModel.steering.autopilot.ap_state.st = ap_state_e::ENGAGED; // Send  data to pypilot
         shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::APP_WIND;
         selectedOption = 2;
