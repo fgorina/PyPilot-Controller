@@ -55,7 +55,9 @@ static int pypilot_tcp_port = 23322;
 Preferences preferences;
 void writePreferences();
 void readPreferences();
+void lookupPypilot();
 
+#include "net_mdns.h"
 #include "ble_server.h"
 
 typedef struct _NetClient
@@ -91,7 +93,12 @@ int prev_y = -1;
 
 static unsigned long last_touched;
 static m5::touch_state_t prev_state;
-static bool displaySaver = false;
+
+#define DISPLAY_ACTIVE  0
+#define DISPLAY_SLEEPING 1
+#define DISPLAY_WAKING  2
+
+static int displaySaver = DISPLAY_ACTIVE;
 
 #define ABOUT_TO_TACK_PORT -1
 #define ABOUT_TO_TACK_STARBOARD 1
@@ -100,11 +107,10 @@ static bool displaySaver = false;
 static int aboutToTackState = ABOUT_TO_TACK_NONE;
 static bool selectingMode = false;
 
-
 static constexpr const char *modes[4] = {"compass", "gps", "wind", "true wind"};
 static int edit_mode = 0;
 static float edit_heading = 0.0;
-static float edit_position = 0.0; // Servo Position
+static float edit_position = 0.0;       // Servo Position
 static float last_drawn_position = 0.0; // Lasr Servo position drawn in screen
 
 static int selectedOption = 0;
@@ -212,6 +218,8 @@ boolean startWiFi()
     USBSerial.print(" IP ");
     USBSerial.println(WiFi.localIP());
 
+    lookupPypilot();
+
     M5Dial.Display.clear(BLACK);
     M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
     M5Dial.Display.drawString("Connecting to ", LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2 - 16);
@@ -219,6 +227,7 @@ boolean startWiFi()
     M5Dial.Display.drawString("PyPilot", LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2 + 16);
     M5Dial.Display.drawString(pypilot_tcp_host.toString(), LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2 + 44);
     delay(1000);
+   
     pypilot_begin(pypClient, pypilot_tcp_host, pypilot_tcp_port); // Connect to the PyPilot TCP server
     M5Dial.Display.setFont(&fonts::Orbitron_Light_32);
 
@@ -344,35 +353,42 @@ void drawScreen()
 void doUpdateRudder(long count)
 {
   edit_position = shipDataModel.steering.autopilot.ap_servo.position.deg + (count * 1.0);
-  
-    if (edit_position < -MAX_RUDDER)
-    {
-      edit_position = -MAX_RUDDER;
-    }
 
-    if (edit_position > MAX_RUDDER)
-    {
-      edit_position = MAX_RUDDER;
-    }
-  
+  if (edit_position < -MAX_RUDDER)
+  {
+    edit_position = -MAX_RUDDER;
+  }
+
+  if (edit_position > MAX_RUDDER)
+  {
+    edit_position = MAX_RUDDER;
+  }
 }
 
-void sendRudderCommand(){
+void sendRudderCommand()
+{
 
-    float  delta = edit_position - shipDataModel.steering.autopilot.ap_servo.position.deg;
+  float delta = edit_position - shipDataModel.steering.autopilot.ap_servo.position.deg;
 
-    //USBSerial.print("Delta: "); USBSerial.println(String(delta, 2));
-    
-    if (fabs(delta) < 0.5){
-      USBSerial.print("Servo position at "); USBSerial.println(String(shipDataModel.steering.autopilot.ap_servo.position.deg, 2));
-      pypilot_send_rudder_command(pypClient.c, 0.0);
-      updateRudder = false;
-    }else{
+  // USBSerial.print("Delta: "); USBSerial.println(String(delta, 2));
+
+  if (fabs(delta) < 0.5)
+  {
+    USBSerial.print("Servo position at ");
+    USBSerial.println(String(shipDataModel.steering.autopilot.ap_servo.position.deg, 2));
+    pypilot_send_rudder_command(pypClient.c, 0.0);
+    updateRudder = false;
+  }
+  else
+  {
 
     float sign = 1.0;
-    if (delta > 0.0){
+    if (delta > 0.0)
+    {
       sign = 1.0;
-    }else{
+    }
+    else
+    {
       sign = -1.0;
     }
     float command = fabs(delta) / 60.0;
@@ -380,28 +396,27 @@ void sendRudderCommand(){
     command = min(max(command, float(0.001)), float(1.0));
     command = command * sign;
 
-   /* USBSerial.print(String(command, 2));
-   USBSerial.print(";");
-   USBSerial.println(String(shipDataModel.steering.autopilot.ap_servo.position.deg, 2));
-   */
+    /* USBSerial.print(String(command, 2));
+    USBSerial.print(";");
+    USBSerial.println(String(shipDataModel.steering.autopilot.ap_servo.position.deg, 2));
+    */
 
     pypilot_send_rudder_command(pypClient.c, command);
-    }
+  }
 }
 
 void commitRudder(long count)
 {
 
-  //pypilot_send_rudder_position(pypClient.c, edit_position);
-  //return;
+  // pypilot_send_rudder_position(pypClient.c, edit_position);
+  // return;
   updateRudder = true;
-  sendRudderCommand();  // Start without command
-  
+  sendRudderCommand(); // Start without command
 }
 
 bool doRudder()
 {
-  
+
   if (M5Dial.BtnA.wasReleased())
   {
     last_touched = millis();
@@ -409,7 +424,7 @@ bool doRudder()
     return true;
   }
 
-   auto t = M5Dial.Touch.getDetail();
+  auto t = M5Dial.Touch.getDetail();
   if (t.state == T_TOUCH_BEGIN)
   {
     last_touched = millis();
@@ -466,8 +481,6 @@ void commitSteering(long count)
   shipDataModel.steering.autopilot.command.deg = edit_heading;
   pypilot_send_command(pypClient.c, edit_heading);
 }
-
-
 
 void updateMenu(long count)
 {
@@ -561,11 +574,12 @@ bool doNavigation()
     {
       selectingMode = !selectingMode;
       doRedraw = true;
-    } else {
+    }
+    else
+    {
       edit_heading = shipDataModel.steering.autopilot.heading.deg;
       commitSteering(0);
       doRedraw = true;
-    
     }
   }
 
@@ -597,7 +611,7 @@ bool doNavigation()
       doRedraw = true;
     }
     aboutToTackState = ABOUT_TO_TACK_NONE;
-   }
+  }
 
   if (t.state != T_NONE)
   {
@@ -648,7 +662,7 @@ bool doStandby()
       shipDataModel.steering.autopilot.ap_state.st = ap_state_e::STANDBY; // Send  data to pypilot
       rudderMode = true;
       updateRudder = false;
-      edit_position = shipDataModel.steering.autopilot.ap_servo.position.deg; 
+      edit_position = shipDataModel.steering.autopilot.ap_servo.position.deg;
       doRedraw = true;
     }
     else if (t.y < LV_VER_RES_MAX / 2)
@@ -746,7 +760,7 @@ bool doStandby()
     case 4: // Rudder
       rudderMode = true;
       updateRudder = false;
-      edit_position = shipDataModel.steering.autopilot.ap_servo.position.deg; 
+      edit_position = shipDataModel.steering.autopilot.ap_servo.position.deg;
       break;
 
     default:
@@ -786,20 +800,44 @@ bool doStandby()
 bool loopTask()
 {
 
-  if (shipDataModel.steering.autopilot.ap_state.st == ap_state_e::STANDBY)
+  if (displaySaver == DISPLAY_SLEEPING)
   {
-    if (rudderMode)
+    auto t = M5Dial.Touch.getDetail();
+    if (M5Dial.BtnA.isPressed() || t.state == T_TOUCH_BEGIN)
     {
-      return doRudder();
+      displaySaver = DISPLAY_WAKING;
+      return false;
+    }else{
+      last_touched = 0;
+      return false;
+    }
+  }else if(displaySaver == DISPLAY_WAKING){
+     auto t = M5Dial.Touch.getDetail();
+    if (!M5Dial.BtnA.isPressed() && t.state == T_NONE){
+      last_touched = millis();
+      return true;
+    }else{
+      last_touched = 0;
+      return false;
+    }
+  }
+  else 
+  {
+    if (shipDataModel.steering.autopilot.ap_state.st == ap_state_e::STANDBY)
+    {
+      if (rudderMode)
+      {
+        return doRudder();
+      }
+      else
+      {
+        return doStandby();
+      }
     }
     else
     {
-      return doStandby();
+      return doNavigation();
     }
-  }
-  else
-  {
-    return doNavigation();
   }
 }
 
@@ -830,6 +868,33 @@ void writePreferences()
   preferences.end();
 }
 
+void lookupPypilot(){
+   M5Dial.Display.clear(BLACK);
+    M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
+    M5Dial.Display.drawString("Searching", LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2);
+
+
+  if (pypilot_tcp_host.toString() == "0.0.0.0" || pypilot_tcp_port <= 0) {
+    USBSerial.println("Cercant pypilot");
+      mdns_begin();
+      int n = mdns_query_svc("pypilot", "tcp");
+      if (n > 0) {
+        pypilot_tcp_host = MDNS.IP(0);
+        pypilot_tcp_port = MDNS.port(0);
+        USBSerial.print("Trobat Pyilot at ");
+        USBSerial.print(pypilot_tcp_host.toString());
+        USBSerial.print(" port ");
+        USBSerial.println(pypilot_tcp_port);
+        writePreferences();
+
+
+      }else{
+        USBSerial.println("No he trobat pypilot");
+      }
+      mdns_end();
+    }
+}
+
 void readPreferences()
 {
   preferences.begin("m5dial_pypilot", true);
@@ -838,6 +903,7 @@ void readPreferences()
   preferences.getBytes("PPHOST", &pypilot_tcp_host, 4);
   pypilot_tcp_port = preferences.getInt("PPPORT", pypilot_tcp_port);
   preferences.end();
+
 }
 
 void setup()
@@ -865,6 +931,13 @@ void loop()
   M5Dial.update();
   app.tick();
 
+  if (!checkConnection())
+  {
+    startWiFi();
+  }
+
+  redraw = redraw || loopTask();
+
   if (last_touched > 0 && (millis() - last_touched > GO_SLEEP_TIMEOUT))
   {
     // disconnect_clients();
@@ -872,22 +945,16 @@ void loop()
     // deep_sleep_with_touch_wakeup();
     USBSerial.println("Going to sleep");
     last_touched = 0;
-    displaySaver = true;
+    displaySaver = DISPLAY_SLEEPING;
     M5Dial.Display.sleep(); // powerSaveOn();
   }
-  else if (last_touched != 0 && displaySaver)
+  else if (last_touched != 0 && displaySaver == DISPLAY_WAKING)
   {
     USBSerial.println("Waking Up");
-    displaySaver = false;
+    displaySaver = DISPLAY_ACTIVE;
     M5Dial.Display.wakeup(); // powerSaveOff();
+    redraw = true;
   }
-
-  if (!checkConnection())
-  {
-    startWiFi();
-  }
-
-  redraw = redraw || loopTask();
 
   if (redraw)
   {

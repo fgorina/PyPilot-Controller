@@ -25,24 +25,22 @@ class MyCallbacks : public BLECharacteristicCallbacks {
     if (value.length() > 0) {
         if (uuid == WIFI_NAME_UUID){
             USBSerial.print("Wifi name: "); USBSerial.println(value.c_str());
-            wifi_ssid = String(value.c_str());
 
+            wifi_ssid = String(value.c_str());
             
         }else if (uuid == WIFI_PASSWORD_UUID){
             USBSerial.print("Wifi pwd: "); USBSerial.println(value.c_str());           
             wifi_password = String(value.c_str());
+            pypilot_tcp_port = 0;
             writePreferences();
             WiFi.disconnect();
-            
-            
-        }
+         }
     } 
   }
 };
 
 
 MyCallbacks* characteristicCallback = new MyCallbacks();
-
 
 class MyServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer *pServer) {
@@ -52,15 +50,14 @@ class MyServerCallbacks : public BLEServerCallbacks {
   };
 
   void onDisconnect(BLEServer *pServer) {
-    Serial.println("Disconnected from BLE central");
+    USBSerial.println("Disconnected from BLE central");
     deviceConnected = false;
     BLEDevice::startAdvertising();
   }
 };
 
-
 void setup_ble() {
-  Serial.println("Starting BLE work!");
+  USBSerial.println("Starting BLE work!");
 
   BLEDevice::init("M5Dial");
   BLEServer *pServer = BLEDevice::createServer();
