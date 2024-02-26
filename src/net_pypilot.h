@@ -43,6 +43,7 @@ extern "C" {
       client.println(F("watch={\"servo.voltage\":1}"));
       client.println(F("watch={\"ap.tack.state\":0.5}"));
       client.println(F("watch={\"ap.tack.direction\":1}"));
+      client.println(F("watch={\"rudder.angle\":0}"));
       client.flush();
     }
   }

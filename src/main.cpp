@@ -84,6 +84,8 @@ static bool rudderMode = false;
 static bool updateRudder = false;
 void sendRudderCommand();
 
+static bool detailMode = false; // Detail Mode is for special info for Autopilot
+
 #include "pypilot_parse.h"
 #include "net_pypilot.h"
 
@@ -297,7 +299,7 @@ void drawNavigationScreen()
 
 void drawRudderScreen()
 {
-  last_drawn_position = shipDataModel.steering.autopilot.ap_servo.position.deg;
+
   M5Dial.Display.setTextSize(1);
   M5Dial.Display.clear(BLACK);
 
@@ -305,7 +307,26 @@ void drawRudderScreen()
   M5Dial.Display.setTextSize(2);
   M5Dial.Display.drawFloat(round(shipDataModel.steering.autopilot.heading.deg), 0, M5Dial.Display.width() / 2, M5Dial.Display.height() / 2);
   M5Dial.Display.setTextSize(1);
-  M5Dial.Display.drawFloat(shipDataModel.steering.autopilot.ap_servo.position.deg, 0, M5Dial.Display.width() / 2, M5Dial.Display.height() / 4 * 3);
+  M5Dial.Display.drawFloat(shipDataModel.steering.rudder_angle.deg, 0, M5Dial.Display.width() / 2, M5Dial.Display.height() / 4 * 3);
+}
+
+void drawDetailScreen()
+{
+  char buffer[128];
+
+ 
+  M5Dial.Display.setTextSize(1);
+  M5Dial.Display.clear(BLACK);
+
+  sprintf(buffer, "V: %.1f", shipDataModel.steering.autopilot.ap_servo.voltage.volt);
+  M5Dial.Display.drawString(buffer, M5Dial.Display.width() / 2, M5Dial.Display.height() / 4);
+
+  sprintf(buffer, "Ah: %.1f", shipDataModel.steering.autopilot.ap_servo.amp_hr.amp_hr);
+  M5Dial.Display.drawString(buffer, M5Dial.Display.width() / 2, M5Dial.Display.height() / 2);
+
+  sprintf(buffer, "T: %.1f", shipDataModel.steering.autopilot.ap_servo.controller_temp.deg_C);
+  M5Dial.Display.drawString(buffer, M5Dial.Display.width() / 2, M5Dial.Display.height() / 4 * 3);
+
 }
 
 void drawReconnectingScreen()
@@ -335,8 +356,11 @@ void drawScreen()
     if (rudderMode)
     {
       drawRudderScreen();
-    }
-    else
+    }else if (detailMode)
+    {
+      drawDetailScreen();
+
+    } else
     {
       drawStandbyScreen();
     }
@@ -352,7 +376,7 @@ void drawScreen()
 
 void doUpdateRudder(long count)
 {
-  edit_position = shipDataModel.steering.autopilot.ap_servo.position.deg + (count * 1.0);
+  edit_position = shipDataModel.steering.rudder_angle.deg + (count * 1.0);
 
   if (edit_position < -MAX_RUDDER)
   {
@@ -368,7 +392,7 @@ void doUpdateRudder(long count)
 void sendRudderCommand()
 {
 
-  float delta = edit_position - shipDataModel.steering.autopilot.ap_servo.position.deg;
+  float delta = edit_position - shipDataModel.steering.rudder_angle.deg;
 
   // USBSerial.print("Delta: "); USBSerial.println(String(delta, 2));
 
@@ -437,12 +461,26 @@ bool doRudder()
     edit_position = 0.0;
     updateRudder = true;
     sendRudderCommand();
+    redraw = true;
   }
 
   redraw = redraw || menu_encoder_update(doUpdateRudder, commitRudder);
-  redraw = redraw || (fabs(last_drawn_position - shipDataModel.steering.autopilot.ap_servo.position.deg) >= 0.01);
+  redraw = redraw || (fabs(last_drawn_position - shipDataModel.steering.rudder_angle.deg) >= 1.0);
 
   return redraw;
+}
+
+
+bool doDetail()
+{
+
+  if (M5Dial.BtnA.wasReleased())
+  {
+    last_touched = millis();
+    detailMode = false;
+    return true;
+  }
+  return false;
 }
 
 void updateSteering(long count)
@@ -652,6 +690,10 @@ bool doStandby()
   {
     M5Dial.Speaker.tone(2000, 100, 0, false);
   }
+  if (t.state == T_HOLD_BEGIN)
+  {
+    M5Dial.Speaker.tone(3000, 100, 0, false);
+  }
   if (t.state == T_TOUCH_END)
   {
     M5Dial.Speaker.tone(1000, 100, 0, false);
@@ -719,6 +761,10 @@ bool doStandby()
       }
     }
     doRedraw = true;
+  }else if (t.state == T_HOLD_END){
+    rudderMode = false;
+    detailMode = true;
+    doRedraw = true;
   }
 
   if (M5Dial.BtnA.wasPressed())
@@ -734,7 +780,7 @@ bool doStandby()
     switch (selectedOption)
     {
 
-    case 0: // COmpass
+    case 0: // Compass
 
       pypilot_send_engage(pypClient.c);
       pypilot_send_mode(pypClient.c, AP_MODE_COMPASS);
@@ -828,6 +874,8 @@ bool loopTask()
       if (rudderMode)
       {
         return doRudder();
+      }else if(detailMode){
+        return doDetail();
       }
       else
       {

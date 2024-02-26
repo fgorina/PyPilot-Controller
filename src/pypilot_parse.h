@@ -85,26 +85,37 @@ extern "C" {
         shipDataModel.steering.autopilot.ap_servo.voltage.volt =
           strtof(dataFeed.substring(strlen("servo.voltage="), dataFeed.length()).c_str(), NULL);
         shipDataModel.steering.autopilot.ap_servo.voltage.age = millis();
+        redraw = redraw || detailMode;
       } else if (dataFeed.startsWith("servo.amp_hours=")) {
         shipDataModel.steering.autopilot.ap_servo.amp_hr.amp_hr =
           strtof(dataFeed.substring(strlen("servo.amp_hours="), dataFeed.length()).c_str(), NULL);
         shipDataModel.steering.autopilot.ap_servo.amp_hr.age = millis();
+        redraw = redraw || detailMode;
       } else if (dataFeed.startsWith("servo.controller_temp=")) {
         shipDataModel.steering.autopilot.ap_servo.controller_temp.deg_C =
           strtof(dataFeed.substring(strlen("servo.controller_temp="), dataFeed.length()).c_str(), NULL);
         shipDataModel.steering.autopilot.ap_servo.controller_temp.age = millis();
+        redraw = redraw || detailMode;
       } else if (dataFeed.startsWith("servo.position=")) {
         float oldServoPos = shipDataModel.steering.autopilot.ap_servo.position.deg;
         shipDataModel.steering.autopilot.ap_servo.position.deg =
           strtof(dataFeed.substring(strlen("servo.position="), dataFeed.length()).c_str(), NULL);
         shipDataModel.steering.autopilot.ap_servo.position.age = millis();
-        redraw = redraw ||  rudderMode;
+        //redraw = redraw ||  rudderMode;
         // Because it seems servo.position_command does not work
 
         if(rudderMode && updateRudder){
           sendRudderCommand();
         }
         
+      }else if (dataFeed.startsWith("rudder.angle=")) {
+        float oldRudderAngle = shipDataModel.steering.rudder_angle.deg;
+
+        shipDataModel.steering.rudder_angle.deg =
+          strtof(dataFeed.substring(strlen("rudder.angle="), dataFeed.length()).c_str(), NULL);
+        shipDataModel.steering.rudder_angle.age = millis();
+
+        redraw = redraw || (fabs(oldRudderAngle - shipDataModel.steering.rudder_angle.deg) >= 1.0);
       }else {
         found = false;
       }      
