@@ -983,7 +983,7 @@ void readPreferences()
 {
 
 
-  preferences.begin("m5dial_pypilot", false);
+  preferences.begin("m5dial_pypilot", true);
   wifi_ssid = preferences.getString("SSID", wifi_ssid);
   wifi_password = preferences.getString("PASSWD", wifi_password);
   pypilot_tcp_host = IPAddress(preferences.getUInt("PPHOST"));
@@ -1022,7 +1022,6 @@ void setup()
   M5Dial.Speaker.setVolume(128);
   last_touched = millis();
   
-
   setup_ble();
 }
 // Encoder dona 64 / volta
