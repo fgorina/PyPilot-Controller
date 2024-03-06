@@ -52,6 +52,12 @@ static String wifi_password = "mypassword"; // Store the password of the wireles
 static IPAddress pypilot_tcp_host = IPAddress(192, 168, 1, 3);
 static int pypilot_tcp_port = 23322;
 
+static int color = GREEN;
+static int selectedColor = DARKGREEN;
+static int emphasisColor = RED;
+
+
+
 Preferences preferences;
 void writePreferences();
 void readPreferences();
@@ -180,7 +186,19 @@ const char *modeString(ap_mode_e mode)
     return modes[idx];
   }
 }
+// COLORS
 
+void setDayColor(){
+  color = GREEN;
+  selectedColor = DARKGREEN;
+  emphasisColor = RED;
+}
+
+void setNightColor(){
+  color = RED;
+  selectedColor = lgfx::v1::color565(128,0,0);
+  emphasisColor = GREEN;
+}
 // WiFI
 boolean checkConnection()
 {                // Check wifi connection.
@@ -243,35 +261,35 @@ void drawStandbyScreen()
   M5Dial.Display.setFont(&fonts::Orbitron_Light_32);
   M5Dial.Display.setTextSize(0.5);
   M5Dial.Display.clear(BLACK);
-  M5Dial.Display.setTextColor(GREEN);
+  M5Dial.Display.setTextColor(color);
 
   if (selectedOption == 0)
   { // Compass
-    M5Dial.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, LV_HOR_RES_MAX / 2, 180, 270, DARKGREEN);
+    M5Dial.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, LV_HOR_RES_MAX / 2, 180, 270, selectedColor);
   }
   else if (selectedOption == 1)
   { // GPS
-    M5Dial.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, LV_HOR_RES_MAX / 2, 270, 0, DARKGREEN);
+    M5Dial.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, LV_HOR_RES_MAX / 2, 270, 0, selectedColor);
   }
   else if (selectedOption == 2)
   { // Wind
-    M5Dial.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, LV_HOR_RES_MAX / 2, 0, 90, DARKGREEN);
+    M5Dial.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, LV_HOR_RES_MAX / 2, 0, 90, selectedColor);
   }
   else if (selectedOption == 3)
   { // True Wind
-    M5Dial.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, LV_HOR_RES_MAX / 2, 90, 180, DARKGREEN);
+    M5Dial.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, LV_HOR_RES_MAX / 2, 90, 180, selectedColor);
   }
 
-  M5Dial.Display.drawFastHLine(0, LV_VER_RES_MAX / 2, LV_HOR_RES_MAX, CYAN);
-  M5Dial.Display.drawFastVLine(LV_HOR_RES_MAX / 2, 0, LV_VER_RES_MAX, CYAN);
+  M5Dial.Display.drawFastHLine(0, LV_VER_RES_MAX / 2, LV_HOR_RES_MAX, color);
+  M5Dial.Display.drawFastVLine(LV_HOR_RES_MAX / 2, 0, LV_VER_RES_MAX, color);
 
   M5Dial.Display.drawString("Compass", M5Dial.Display.width() / 4, M5Dial.Display.height() / 4);
   M5Dial.Display.drawString("GPS", M5Dial.Display.width() / 4 * 3, M5Dial.Display.height() / 4);
   M5Dial.Display.drawString("T Wind", M5Dial.Display.width() / 4, M5Dial.Display.height() / 4 * 3);
   M5Dial.Display.drawString("Wind", M5Dial.Display.width() / 4 * 3, M5Dial.Display.height() / 4 * 3);
 
-  M5Dial.Display.fillCircle(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, selectedOption == 4 ? DARKGREEN : BLACK);
-  M5Dial.Display.drawCircle(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, CYAN);
+  M5Dial.Display.fillCircle(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, selectedOption == 4 ? selectedColor : BLACK);
+  M5Dial.Display.drawCircle(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, color);
 
   M5Dial.Display.drawString("Rudder", M5Dial.Display.width() / 2, M5Dial.Display.height() / 2);
 }
@@ -286,15 +304,15 @@ void drawNavigationScreen()
   M5Dial.Display.setTextSize(2);
   M5Dial.Display.drawFloat(round(shipDataModel.steering.autopilot.heading.deg), 0, M5Dial.Display.width() / 2, M5Dial.Display.height() / 2);
   M5Dial.Display.setTextSize(1);
-  M5Dial.Display.setTextColor(selectingMode ? RED : GREEN);
+  M5Dial.Display.setTextColor(selectingMode ? emphasisColor : color);
   M5Dial.Display.drawString(modes[edit_mode], M5Dial.Display.width() / 2, M5Dial.Display.height() / 4 * 3);
-  M5Dial.Display.setTextColor(GREEN);
+  M5Dial.Display.setTextColor(color);
 
   M5Dial.Display.fillTriangle(0, LV_VER_RES_MAX / 2, 30, LV_VER_RES_MAX / 2 - 17, 30, LV_VER_RES_MAX / 2 + 17,
-                              aboutToTackState == ABOUT_TO_TACK_PORT ? ORANGE : ((shipDataModel.steering.autopilot.tack.st != ap_tack_state_e::TACK_NONE && shipDataModel.steering.autopilot.tack.direction == ap_tack_direction_e::TACKING_TO_PORT) ? RED : GREEN));
+                              aboutToTackState == ABOUT_TO_TACK_PORT ? ORANGE : ((shipDataModel.steering.autopilot.tack.st != ap_tack_state_e::TACK_NONE && shipDataModel.steering.autopilot.tack.direction == ap_tack_direction_e::TACKING_TO_PORT) ? emphasisColor : color));
 
   M5Dial.Display.fillTriangle(LV_HOR_RES_MAX - 30, LV_VER_RES_MAX / 2 - 17, LV_HOR_RES_MAX - 30, LV_VER_RES_MAX / 2 + 17, LV_HOR_RES_MAX, LV_VER_RES_MAX / 2,
-                              aboutToTackState == ABOUT_TO_TACK_STARBOARD ? ORANGE : ((shipDataModel.steering.autopilot.tack.st != ap_tack_state_e::TACK_NONE && shipDataModel.steering.autopilot.tack.direction == ap_tack_direction_e::TACKING_TO_STARBOARD) ? RED : GREEN));
+                              aboutToTackState == ABOUT_TO_TACK_STARBOARD ? ORANGE : ((shipDataModel.steering.autopilot.tack.st != ap_tack_state_e::TACK_NONE && shipDataModel.steering.autopilot.tack.direction == ap_tack_direction_e::TACKING_TO_STARBOARD) ? emphasisColor : color));
 }
 
 void drawRudderScreen()
@@ -662,6 +680,17 @@ bool doNavigation()
 bool doStandby()
 {
   bool doRedraw = false;
+
+  if(M5Dial.BtnA.wasReleasedAfterHold()){
+    if (color == GREEN){
+      setNightColor();    
+    }else{
+      setDayColor();
+    }
+    doRedraw = true;
+    return true;
+  }
+
   long newPosition = M5Dial.Encoder.read();
   if (newPosition != oldPosition)
   {
@@ -767,6 +796,7 @@ bool doStandby()
     doRedraw = true;
   }
 
+  
   if (M5Dial.BtnA.wasPressed())
   {
     M5Dial.Speaker.tone(2000, 100, 0, false);
@@ -891,7 +921,7 @@ bool loopTask()
 
 void splash()
 {
-  M5Dial.Display.setTextColor(GREEN);
+  M5Dial.Display.setTextColor(color);
   M5Dial.Display.setTextDatum(middle_center);
   M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
   M5Dial.Display.setTextSize(1);
@@ -899,6 +929,7 @@ void splash()
   M5Dial.Display.drawString("Paco Gorina", LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2 + 16);
   M5Dial.Display.drawString(version, LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2 + 48);
   M5Dial.Display.setFont(&fonts::Orbitron_Light_32);
+  delay(5000);
 }
 
 void writePreferences()
@@ -945,12 +976,27 @@ void lookupPypilot(){
 
 void readPreferences()
 {
+
+
   preferences.begin("m5dial_pypilot", true);
   wifi_ssid = preferences.getString("SSID", wifi_ssid);
   wifi_password = preferences.getString("PASSWD", wifi_password);
   preferences.getBytes("PPHOST", &pypilot_tcp_host, 4);
   pypilot_tcp_port = preferences.getInt("PPPORT", pypilot_tcp_port);
   preferences.end();
+
+  if(M5Dial.BtnA.isPressed()){
+    USBSerial.println("Resetting PyPilot Host");
+
+    pypilot_tcp_port = 0;
+    M5Dial.Display.clear(BLACK);
+    M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
+    M5Dial.Display.drawString("Cleared Host", LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2);
+    delay(5000);
+
+  }else{
+    USBSerial.println(pypilot_tcp_host.toString());
+  }
 
 }
 
@@ -959,14 +1005,15 @@ void setup()
 
   auto cfg = M5.config();
   M5Dial.begin(cfg, true, false);
+  USBSerial.begin(115200);
 
   splash();
-
+  M5Dial.update();
   readPreferences();
 
   M5Dial.Speaker.setVolume(128);
   last_touched = millis();
-  USBSerial.begin(115200);
+  
 
   setup_ble();
 }
