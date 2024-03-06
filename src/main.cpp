@@ -935,16 +935,21 @@ void splash()
 void writePreferences()
 {
   preferences.begin("m5dial_pypilot", false);
-  preferences.remove("SSID");
+  preferences.clear();
+ /* preferences.remove("SSID");
   preferences.remove("PASSWD");
   preferences.remove("PPHOST");
   preferences.remove("PPPORT");
+  */
 
   preferences.putString("SSID", wifi_ssid);
   preferences.putString("PASSWD", wifi_password);
-  preferences.putBytes("PPHOST", &pypilot_tcp_host, 4);
+  preferences.putUInt("PPHOST", pypilot_tcp_host);
   preferences.putInt("PPPORT", pypilot_tcp_port);
   preferences.end();
+
+  USBSerial.print(" Written to Preferences ");
+  USBSerial.println(pypilot_tcp_host.toString());
 }
 
 void lookupPypilot(){
@@ -978,12 +983,15 @@ void readPreferences()
 {
 
 
-  preferences.begin("m5dial_pypilot", true);
+  preferences.begin("m5dial_pypilot", false);
   wifi_ssid = preferences.getString("SSID", wifi_ssid);
   wifi_password = preferences.getString("PASSWD", wifi_password);
-  preferences.getBytes("PPHOST", &pypilot_tcp_host, 4);
+  pypilot_tcp_host = IPAddress(preferences.getUInt("PPHOST"));
   pypilot_tcp_port = preferences.getInt("PPPORT", pypilot_tcp_port);
   preferences.end();
+
+  USBSerial.print(" Read from Preferences ");
+  USBSerial.println(pypilot_tcp_host.toString());
 
   if(M5Dial.BtnA.isPressed()){
     USBSerial.println("Resetting PyPilot Host");
