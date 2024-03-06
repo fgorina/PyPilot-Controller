@@ -17,7 +17,7 @@
 
 // Version
 
-static const char *version = "v 0.0.1";
+static const char *version = "v 0.0.2";
 
 // Define states
 
@@ -394,7 +394,7 @@ void drawScreen()
 
 void doUpdateRudder(long count)
 {
-  edit_position = shipDataModel.steering.rudder_angle.deg + (count * 1.0);
+  edit_position = shipDataModel.steering.rudder_angle.deg - (count * 1.0);
 
   if (edit_position < -MAX_RUDDER)
   {
