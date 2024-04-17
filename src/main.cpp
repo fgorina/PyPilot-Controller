@@ -326,6 +326,7 @@ void drawRudderScreen()
   M5Dial.Display.drawFloat(round(shipDataModel.steering.autopilot.heading.deg), 0, M5Dial.Display.width() / 2, M5Dial.Display.height() / 2);
   M5Dial.Display.setTextSize(1);
   M5Dial.Display.drawFloat(shipDataModel.steering.rudder_angle.deg, 0, M5Dial.Display.width() / 2, M5Dial.Display.height() / 4 * 3);
+  last_drawn_position = shipDataModel.steering.rudder_angle.deg;
 }
 
 void drawDetailScreen()
