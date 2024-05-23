@@ -735,6 +735,7 @@ bool doStandby()
       rudderMode = true;
       updateRudder = false;
       edit_position = shipDataModel.steering.autopilot.ap_servo.position.deg;
+      selectedOption = 4;
       doRedraw = true;
     }
     else if (t.y < LV_VER_RES_MAX / 2)
