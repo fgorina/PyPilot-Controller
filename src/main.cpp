@@ -15,6 +15,7 @@
 #include <BLEUtils.h>
 #include <BLEServer.h>
 
+
 // Version
 
 static const char *version = "v 0.0.2";
@@ -63,8 +64,16 @@ void writePreferences();
 void readPreferences();
 void lookupPypilot();
 
+void setStateCharacteristicRudder(float rudder_angle);
+void setStateCharacteristicHeading(float heading);
+void setStateCharacteristicCommand(float command);
+void setStateCharacteristicEnabled(int state);
+void setStateCharacteristicTackState(int  tackState);
+void setStateCharacteristicTackDirection(int  tackDirection);
+void setStateCharacteristicMode(int  mode);
+
 #include "net_mdns.h"
-#include "ble_server.h"
+
 
 typedef struct _NetClient
 {
@@ -94,6 +103,7 @@ static bool detailMode = false; // Detail Mode is for special info for Autopilot
 
 #include "pypilot_parse.h"
 #include "net_pypilot.h"
+#include "ble_server.h"
 
 long oldPosition = -999;
 int prev_x = -1;
@@ -124,6 +134,60 @@ static float last_drawn_position = 0.0; // Lasr Servo position drawn in screen
 static int selectedOption = 0;
 
 #include "menu_encoder.h"
+
+// Funcions per connectar-se per BLE
+void setStateCharacteristicRudder(float rudder_angle) {
+  sprintf(buffer, "R%.0f", rudder_angle);
+
+  stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
+  stateCharacteristic->notify();
+}
+void setStateCharacteristicHeading(float heading) {
+  sprintf(buffer, "H%.0f", heading);
+
+  stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
+  stateCharacteristic->notify();
+}
+
+void setStateCharacteristicCommand(float command) {
+  sprintf(buffer, "C%.0f", command);
+
+  stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
+  stateCharacteristic->notify();
+}
+
+void setStateCharacteristicEnabled(int state) {
+
+  if(state == 1){
+    sprintf(buffer, "E");
+  }else{
+    sprintf(buffer, "D");
+  }
+  stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
+  stateCharacteristic->notify();
+}
+
+void setStateCharacteristicTackState(int  tackState){
+  sprintf(buffer, "T%d", tackState);
+
+  stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
+  stateCharacteristic->notify();
+}
+void setStateCharacteristicTackDirection(int  tackDirection){
+  sprintf(buffer, "T%d", tackDirection);
+
+  stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
+  stateCharacteristic->notify();
+}
+
+void setStateCharacteristicMode(int  mode){
+
+  sprintf(buffer, "M%i", mode);
+
+  stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
+  stateCharacteristic->notify();
+}
+// Fi BLE
 
 int modeIndex(ap_mode_e mode)
 {

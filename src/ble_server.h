@@ -8,15 +8,71 @@ extern "C" {
 #define SERVICE_UUID "f85015df-6af5-4ee3-a8cb-a8f7250d4466" // General service for configuring WiFi in all my products
 #define WIFI_NAME_UUID "bea80929-aa42-4641-a0c2-8f08b70e0aaa"
 #define WIFI_PASSWORD_UUID "22643f77-dcfd-4e01-9b9f-bb63692a215f"
+#define COMMAND_UUID "02804fff-8c38-485f-964a-474dc4f179b2"
+#define STATE_UUID "de7f5161-6f48-4c9a-aacc-6079082e6cc7"
 // Processes values written to commandCharacteristic.
 // There are action commands and configurtation commands
 
 BLECharacteristic *nameCharacteristic;
 BLECharacteristic *passwordCharacteristic;
+BLECharacteristic *commandCharacteristic;
+BLECharacteristic *stateCharacteristic;
 
 bool deviceConnected = false;
+char buffer[256];
+
+void doCommand(String command){
+
+  char s = command[0];
+
+  if (s == 'E'){
+    pypilot_send_engage(pypClient.c);
+  }else if (s == 'D'){
+    pypilot_send_disengage(pypClient.c);
+  }else if (s == 'M'){
+    String mode = command.substring(1);
+
+    if(mode == "rudder"){
+      pypilot_send_disengage(pypClient.c);
+    }else{
+      pypilot_send_engage(pypClient.c);
+      if (mode == "gps"){
+        pypilot_send_mode(pypClient.c, AP_MODE_GPS);
+      }else if (mode == "wind"){
+        pypilot_send_mode(pypClient.c, AP_MODE_WIND);
+      }else if (mode == "true wind"){
+        pypilot_send_mode(pypClient.c, AP_MODE_WIND_TRUE);
+      }else if (mode == "compass"){
+        pypilot_send_mode(pypClient.c, AP_MODE_COMPASS);
+      }
+    }
+  } else if(s == 'C'){
+    String s_value = command.substring(1);
+    float heading = atof(s_value.c_str());
+    pypilot_send_command(pypClient.c, heading);
+  }else if (s ==  'T'){
+    char direction = command[1];
+    if (direction == 'P'){
+      pypilot_send_tack(pypClient.c, "port");
+    }else{
+      pypilot_send_tack(pypClient.c, "starboard");
+    }
+  }else if (s == 'X'){
+    pypilot_send_cancel_tack(pypClient.c);
+  }else if (s == 'R'){
+    char direction = command[1];
+    if (direction == 'P'){
+      pypilot_send_rudder_command(pypClient.c, 1.0);
+    }else {
+      pypilot_send_rudder_command(pypClient.c, -1.0);
+    }
+    
+  }
 
 
+
+
+}
 class MyCallbacks : public BLECharacteristicCallbacks {
 
   void onWrite(BLECharacteristic *pCharacteristic) {
@@ -34,10 +90,13 @@ class MyCallbacks : public BLECharacteristicCallbacks {
             pypilot_tcp_port = 0;
             writePreferences();
             WiFi.disconnect();
+         }else if (uuid == COMMAND_UUID){
+            USBSerial.print("Command received: "); USBSerial.println(value.c_str());           
          }
     } 
   }
 };
+
 
 
 MyCallbacks* characteristicCallback = new MyCallbacks();
@@ -56,6 +115,9 @@ class MyServerCallbacks : public BLEServerCallbacks {
   }
 };
 
+
+
+
 void setup_ble() {
   USBSerial.println("Starting BLE work!");
 
@@ -63,14 +125,26 @@ void setup_ble() {
   BLEServer *pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
   BLEService *pService = pServer->createService(SERVICE_UUID);
+
   nameCharacteristic = pService->createCharacteristic(
     WIFI_NAME_UUID,
     BLECharacteristic::PROPERTY_WRITE);
     nameCharacteristic->setCallbacks(characteristicCallback);
+
   passwordCharacteristic = pService->createCharacteristic(
     WIFI_PASSWORD_UUID,
     BLECharacteristic::PROPERTY_WRITE);
     passwordCharacteristic->setCallbacks(characteristicCallback);
+
+  commandCharacteristic = pService->createCharacteristic(
+    WIFI_NAME_UUID,
+    BLECharacteristic::PROPERTY_WRITE);
+    commandCharacteristic->setCallbacks(characteristicCallback);
+
+  stateCharacteristic = pService->createCharacteristic(
+    WIFI_PASSWORD_UUID,
+    BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+    stateCharacteristic->setCallbacks(characteristicCallback);
 
   pService->start();
   // BLEAdvertising *pAdvertising = pServer->getAdvertising();  // this still is working for backward compatibility
