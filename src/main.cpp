@@ -1092,7 +1092,7 @@ void setup()
 }
 // Encoder dona 64 / volta
 
-#define GO_SLEEP_TIMEOUT 60000ul // 5 '
+#define GO_SLEEP_TIMEOUT 600000ul // 50 '
 void loop()
 {
 
