@@ -5,6 +5,25 @@
 extern "C" {
 #endif
 
+int  modeToInt(ap_mode_e mode){
+
+  switch(mode){
+    case ap_mode_e::COG_TRUE : 
+      return 1;
+
+    case ap_mode_e::APP_WIND:
+      return 2;
+
+    case ap_mode_e::HEADING_MAG:
+      return 0;
+
+    case ap_mode_e::TRUE_WIND:
+      return 3;
+
+  }
+  return 0;
+}
+
   bool pypilot_parse(WiFiClient& client) {
     bool found = false;
     String dataFeed = client.readStringUntil('\n');
@@ -33,13 +52,19 @@ extern "C" {
         ap_state_e oldState = shipDataModel.steering.autopilot.ap_state.st;
         shipDataModel.steering.autopilot.ap_state.st = ap_state_e::ENGAGED;
         shipDataModel.steering.autopilot.ap_state.age = millis();
+
+        // We update all Pilot related values
+        
         setStateCharacteristicEnabled(1);
+        setStateCharacteristicMode(modeToInt(shipDataModel.steering.autopilot.ap_mode.mode)); 
+        setStateCharacteristicCommand(shipDataModel.steering.autopilot.command.deg); // Do better
         redraw = redraw || (oldState != shipDataModel.steering.autopilot.ap_state.st);
       } else if (dataFeed.startsWith("ap.enabled=false")) {
         ap_state_e oldState = shipDataModel.steering.autopilot.ap_state.st;
         shipDataModel.steering.autopilot.ap_state.st = ap_state_e::STANDBY; 
         shipDataModel.steering.autopilot.ap_state.age = millis();
         setStateCharacteristicEnabled(0);
+        setStateCharacteristicMode(4);
         redraw = redraw || (oldState != shipDataModel.steering.autopilot.ap_state.st);
       } else if (dataFeed.startsWith("ap.tack.state=\"")) {
         ap_tack_state_e oldState = shipDataModel.steering.autopilot.tack.st;
@@ -79,16 +104,21 @@ extern "C" {
         USBSerial.print("Received "); USBSerial.println(mode);
         shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::MODE_NA;
         shipDataModel.steering.autopilot.ap_mode.age = millis();
+        int localMode = 0;
         if (mode == "gps") {
+          localMode = 1;
           shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::COG_TRUE;
         } else if (mode == "wind") {
           shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::APP_WIND;
+          localMode = 2;
         } else if (mode == "compass") {
           shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::HEADING_MAG;
+          localMode = 0;
         } else if (mode == "true wind") {
           shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::TRUE_WIND;
+          localMode = 3;
         }
-        setStateCharacteristicMode(shipDataModel.steering.autopilot.ap_mode.mode);
+        setStateCharacteristicMode(localMode);
         redraw = redraw || (oldMode != shipDataModel.steering.autopilot.ap_mode.mode);
       } else if (dataFeed.startsWith("servo.voltage=")) {
         shipDataModel.steering.autopilot.ap_servo.voltage.volt =

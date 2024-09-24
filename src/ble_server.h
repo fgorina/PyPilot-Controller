@@ -31,7 +31,7 @@ void doCommand(String command){
     pypilot_send_disengage(pypClient.c);
   }else if (s == 'M'){
     String mode = command.substring(1);
-
+    USBSerial.print("eStting mode to "); USBSerial.println(mode);
     if(mode == "rudder"){
       pypilot_send_disengage(pypClient.c);
     }else{
@@ -49,6 +49,7 @@ void doCommand(String command){
   } else if(s == 'C'){
     String s_value = command.substring(1);
     float heading = atof(s_value.c_str());
+     USBSerial.print("Setting command to "); USBSerial.println(s_value);
     pypilot_send_command(pypClient.c, heading);
   }else if (s ==  'T'){
     char direction = command[1];
@@ -67,6 +68,17 @@ void doCommand(String command){
       pypilot_send_rudder_command(pypClient.c, -1.0);
     }
     
+  }else if (s == 'Z'){
+    if (strlen(command.c_str()) > 1){
+      String s_value = command.substring(1);
+
+      float angle = atof(s_value.c_str());
+      USBSerial.print("Setting rudder angle to "); USBSerial.println(s_value);
+      edit_position = angle;
+    }else{
+      edit_position = 0.0;
+    }
+    sendRudderCommand();
   }
 
 
@@ -91,7 +103,8 @@ class MyCallbacks : public BLECharacteristicCallbacks {
             writePreferences();
             WiFi.disconnect();
          }else if (uuid == COMMAND_UUID){
-            USBSerial.print("Command received: "); USBSerial.println(value.c_str());           
+            USBSerial.print("Command received: "); USBSerial.println(value.c_str());        
+            doCommand(String(value.c_str()));
          }
     } 
   }
@@ -121,7 +134,7 @@ class MyServerCallbacks : public BLEServerCallbacks {
 void setup_ble() {
   USBSerial.println("Starting BLE work!");
 
-  BLEDevice::init("M5Dial");
+  BLEDevice::init("PyPilot");
   BLEServer *pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
   BLEService *pService = pServer->createService(SERVICE_UUID);
@@ -137,12 +150,12 @@ void setup_ble() {
     passwordCharacteristic->setCallbacks(characteristicCallback);
 
   commandCharacteristic = pService->createCharacteristic(
-    WIFI_NAME_UUID,
+    COMMAND_UUID,
     BLECharacteristic::PROPERTY_WRITE);
     commandCharacteristic->setCallbacks(characteristicCallback);
 
   stateCharacteristic = pService->createCharacteristic(
-    WIFI_PASSWORD_UUID,
+    STATE_UUID,
     BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
     stateCharacteristic->setCallbacks(characteristicCallback);
 

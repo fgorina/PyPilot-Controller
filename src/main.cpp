@@ -18,7 +18,7 @@
 
 // Version
 
-static const char *version = "v 0.0.2";
+static const char *version = "v 0.0.3";
 
 // Define states
 
@@ -103,6 +103,15 @@ static bool detailMode = false; // Detail Mode is for special info for Autopilot
 
 #include "pypilot_parse.h"
 #include "net_pypilot.h"
+
+static constexpr const char *modes[4] = {"compass", "gps", "wind", "true wind"};
+static int edit_mode = 0;
+static float edit_heading = 0.0;
+static float edit_position = 0.0;       // Servo Position
+static float last_drawn_position = 0.0; // Lasr Servo position drawn in screen
+
+static int selectedOption = 0;
+
 #include "ble_server.h"
 
 long oldPosition = -999;
@@ -125,13 +134,7 @@ static int displaySaver = DISPLAY_ACTIVE;
 static int aboutToTackState = ABOUT_TO_TACK_NONE;
 static bool selectingMode = false;
 
-static constexpr const char *modes[4] = {"compass", "gps", "wind", "true wind"};
-static int edit_mode = 0;
-static float edit_heading = 0.0;
-static float edit_position = 0.0;       // Servo Position
-static float last_drawn_position = 0.0; // Lasr Servo position drawn in screen
 
-static int selectedOption = 0;
 
 #include "menu_encoder.h"
 
@@ -174,7 +177,7 @@ void setStateCharacteristicTackState(int  tackState){
   stateCharacteristic->notify();
 }
 void setStateCharacteristicTackDirection(int  tackDirection){
-  sprintf(buffer, "T%d", tackDirection);
+  sprintf(buffer, "U%d", tackDirection);
 
   stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
   stateCharacteristic->notify();
@@ -186,6 +189,8 @@ void setStateCharacteristicMode(int  mode){
 
   stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
   stateCharacteristic->notify();
+  USBSerial.print("Sending "); USBSerial.println(buffer);
+
 }
 // Fi BLE
 
@@ -1039,6 +1044,16 @@ void lookupPypilot(){
 
 
       }else{
+        pypilot_tcp_host = IPAddress(192, 168, 1, 148);
+        pypilot_tcp_port = 23322;
+        USBSerial.print("Trobat Pyilot at ");
+        USBSerial.print(pypilot_tcp_host.toString());
+        USBSerial.print(" port ");
+        USBSerial.println(pypilot_tcp_port);
+        writePreferences();
+
+
+
         USBSerial.println("No he trobat pypilot");
       }
       mdns_end();
