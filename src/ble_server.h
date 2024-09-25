@@ -21,6 +21,21 @@ BLECharacteristic *stateCharacteristic;
 bool deviceConnected = false;
 char buffer[256];
 
+void sendInfo(){
+  if (shipDataModel.steering.autopilot.ap_state.st == ap_state_e::ENGAGED){
+    setStateCharacteristicEnabled(1);
+    setStateCharacteristicMode(modeToInt(shipDataModel.steering.autopilot.ap_mode.mode)); 
+  }else{
+    setStateCharacteristicEnabled(0);
+    setStateCharacteristicMode(4); 
+  }
+  setStateCharacteristicCommand(shipDataModel.steering.autopilot.command.deg); 
+  setStateCharacteristicHeading(shipDataModel.steering.autopilot.heading.deg);
+  setStateCharacteristicRudder(shipDataModel.steering.rudder_angle.deg);
+  setStateCharacteristicTackState(shipDataModel.steering.autopilot.tack.st);
+  setStateCharacteristicTackDirection(shipDataModel.steering.autopilot.tack.direction);
+}
+
 void doCommand(String command){
 
   char s = command[0];
@@ -79,12 +94,16 @@ void doCommand(String command){
       edit_position = 0.0;
     }
     sendRudderCommand();
+  }else if (s == 'I'){  // Send all information to sync states
+    sendInfo();
   }
 
 
 
 
 }
+
+
 class MyCallbacks : public BLECharacteristicCallbacks {
 
   void onWrite(BLECharacteristic *pCharacteristic) {

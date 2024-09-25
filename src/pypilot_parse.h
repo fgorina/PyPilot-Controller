@@ -57,7 +57,7 @@ int  modeToInt(ap_mode_e mode){
         
         setStateCharacteristicEnabled(1);
         setStateCharacteristicMode(modeToInt(shipDataModel.steering.autopilot.ap_mode.mode)); 
-        setStateCharacteristicCommand(shipDataModel.steering.autopilot.command.deg); // Do better
+        setStateCharacteristicCommand(shipDataModel.steering.autopilot.command.deg); 
         redraw = redraw || (oldState != shipDataModel.steering.autopilot.ap_state.st);
       } else if (dataFeed.startsWith("ap.enabled=false")) {
         ap_state_e oldState = shipDataModel.steering.autopilot.ap_state.st;
