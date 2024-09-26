@@ -46,11 +46,11 @@ void doCommand(String command){
     pypilot_send_disengage(pypClient.c);
   }else if (s == 'M'){
     String mode = command.substring(1);
-    USBSerial.print("eStting mode to "); USBSerial.println(mode);
+    USBSerial.print("Setting mode to "); USBSerial.println(mode);
     if(mode == "rudder"){
       pypilot_send_disengage(pypClient.c);
     }else{
-      pypilot_send_engage(pypClient.c);
+      //pypilot_send_engage(pypClient.c);
       if (mode == "gps"){
         pypilot_send_mode(pypClient.c, AP_MODE_GPS);
       }else if (mode == "wind"){
