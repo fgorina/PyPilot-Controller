@@ -64,7 +64,7 @@ int  modeToInt(ap_mode_e mode){
         shipDataModel.steering.autopilot.ap_state.st = ap_state_e::STANDBY; 
         shipDataModel.steering.autopilot.ap_state.age = millis();
         setStateCharacteristicEnabled(0);
-        setStateCharacteristicMode(4);
+        
         redraw = redraw || (oldState != shipDataModel.steering.autopilot.ap_state.st);
       } else if (dataFeed.startsWith("ap.tack.state=\"")) {
         ap_tack_state_e oldState = shipDataModel.steering.autopilot.tack.st;

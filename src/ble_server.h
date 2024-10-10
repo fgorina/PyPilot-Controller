@@ -50,7 +50,7 @@ void doCommand(String command){
     if(mode == "rudder"){
       pypilot_send_disengage(pypClient.c);
     }else{
-      pypilot_send_engage(pypClient.c);
+      //pypilot_send_engage(pypClient.c);
       if (mode == "gps"){
         pypilot_send_mode(pypClient.c, AP_MODE_GPS);
       }else if (mode == "wind"){
