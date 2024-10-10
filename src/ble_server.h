@@ -46,7 +46,7 @@ void doCommand(String command){
     pypilot_send_disengage(pypClient.c);
   }else if (s == 'M'){
     String mode = command.substring(1);
-    USBSerial.print("eStting mode to "); USBSerial.println(mode);
+    USBSerial.print("Setting mode to "); USBSerial.println(mode);
     if(mode == "rudder"){
       pypilot_send_disengage(pypClient.c);
     }else{
@@ -78,9 +78,9 @@ void doCommand(String command){
   }else if (s == 'R'){
     char direction = command[1];
     if (direction == 'P'){
-      pypilot_send_rudder_command(pypClient.c, 1.0);
+      pypilot_send_rudder_command(pypClient.c, 0.5);
     }else {
-      pypilot_send_rudder_command(pypClient.c, -1.0);
+      pypilot_send_rudder_command(pypClient.c, -0.5);
     }
     
   }else if (s == 'Z'){
@@ -93,6 +93,9 @@ void doCommand(String command){
     }else{
       edit_position = 0.0;
     }
+    // This two flags are necessary so rudder is updated till target
+    rudderMode = true;
+    updateRudder = true;
     sendRudderCommand();
   }else if (s == 'I'){  // Send all information to sync states
     sendInfo();
