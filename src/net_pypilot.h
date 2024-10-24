@@ -74,6 +74,7 @@ extern "C" {
   void pypilot_send_rudder_command(WiFiClient& client, float command) {
   
     if (client.connected()) {
+      
       //USBSerial.print("Sending rudderCommand "); USBSerial.println(String(command, 2));
       client.print(F("servo.command="));
       client.println(String(command, 2));
@@ -83,9 +84,10 @@ extern "C" {
 
    void pypilot_send_rudder_position(WiFiClient& client, float pos) {
     if (client.connected()) {
+      float lpos = min(max(pos, -float(MAX_RUDDER)), float(MAX_RUDDER));
       USBSerial.print("Sending rudder Position "); USBSerial.println(String(pos, 2));
       client.print(F("servo.position_command="));
-      client.println(String(pos, 2));
+      client.println(String(lpos, 2));
       client.flush();
     }
   }

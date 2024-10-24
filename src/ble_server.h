@@ -78,9 +78,13 @@ void doCommand(String command){
   }else if (s == 'R'){
     char direction = command[1];
     if (direction == 'P'){
-      pypilot_send_rudder_command(pypClient.c, 0.5);
+      if(shipDataModel.steering.rudder_angle.deg < (float(MAX_RUDDER) - 1.0)){
+        pypilot_send_rudder_command(pypClient.c, 0.5);
+      }
     }else {
+      if(shipDataModel.steering.rudder_angle.deg > (-float(MAX_RUDDER) + 1.0) ){
       pypilot_send_rudder_command(pypClient.c, -0.5);
+      }
     }
     
   }else if (s == 'Z'){
