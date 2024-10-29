@@ -1,22 +1,102 @@
 # Pypilot controller
 
-This applicatiuons uses am M5Dial to control PyPilot.
+This is a M5Dial controller for PyPilot.
 
-You may select any of the navigation modes or directly controlling the rudder.
+It makes a TCP connection to the PyPilot at port 23322 and opens a BLE service to configure :
+  - Network
+  - Password
 
-The encoder is used to select the rhumb.
+There are 2 more characteristics 
+  - Command : Writable, you may send commands
+  - State : Readable, Notify sends state
 
-The touch screen is used to select options and whan navigating a click sets rhumb to actual heading.
+Will translate commands receive from Command to Pypilot commands and send in state 
+pypilot data as :
+  - Heading
+  - Command
+  - Rudder Angle
+  - PyPilot Mode
+  - Engaged / Not Engaged
 
-Also a click when in rudder mode puts the rudder to 0º, just straight.
+  Allowing to write BLE controllers that don't need a TCP connection to PyPilot
 
-The device connects to the pypilot through WiFi.
+## Use and configuration
+Service for configuration and use is
 
-Two BLE characteristics are used to define ssid and password. Then the device uses mDNS to locate the pypilot.
+  Service f85015df-6af5-4ee3-a8cb-a8f7250d4466
 
-Characteristics are at service "f85015df-6af5-4ee3-a8cb-a8f7250d4466"
+First we must give the controller the ssid and password of the network writing :
 
-and are SSID : "bea80929-aa42-4641-a0c2-8f08b70e0aaa"
-    Password : "22643f77-dcfd-4e01-9b9f-bb63692a215f"
+  - Characteristic bea80929-aa42-4641-a0c2-8f08b70e0aaa ssid
+  - Characteristic 22643f77-dcfd-4e01-9b9f-bb63692a215f password
 
-Use any BLE application to write them.
+  It should lookup for pypilot with mDNS. If changint ip push the encoder button when powering up and will clear old host and lookup for a new one.
+
+When connects shows a screen with the 4 modes (Compass, gps, wind, true wind) and a center rudder button. They may be selected just by clicking or selecting with the encoder an clicking the encoder button.
+
+In rudder you manage the rudder by turning the encoder to the desired rudder angle. Tap in the center will reset rudder to 0.
+
+In other modes it shows the Heading in the center, an editable desired heading at top, the mode and two arrows for the tack.
+
+Just move the encoder till top field show desired angle. When you stop tmoving the encoder, the order will be sent to pypilot.
+
+If tapping the mode, it turns red and encoder may be used to change it tapping when the desired mode is shown.
+
+Of course only acceptable modes will be accepted by pypilot depending it's hardware and conections.
+
+Long pressing an arrow turns it red and starts tacking in the direction of the arrow. A tap everywhere cancels the tacking.
+
+A click in the encoder button goes back to the main screen.
+
+## BLE Gateway
+
+The M5Dial also has characteristics 
+
+  - Characteristic 02804fff-8c38-485f-964a-474dc4f179b2 Command (writable)
+  - Characteristic de7f5161-6f48-4c9a-aacc-6079082e6cc7 State (readable, notify)
+
+Usually an application subscribes to State and sends commands to command.
+
+### State
+
+Messages received from State are composed by a first letter (type) and the rest are parameters.
+
+Types of message are
+
+  - E : Engaged
+  - D : Disengaged
+  - H<degrees> : Heading
+  - R<degrees> : Rudder Angle
+  - C<degrees> : Command
+  - M<int>  : Mode where <int> is:
+     - 0 -> Compass
+    - 1 -> Gps
+    - 2 -> Wind
+    - 3 -> True Wind
+    - 4 -> Manual / Rudder control
+  - T<int> : Tack State where <int> is:
+    - 0 -> none, no tacking
+    - 1 -> begin
+    - 2 -> waiting
+    - 3 -> tacking
+
+  - U<int> : Tack Direction where <int> is:
+    - -1 -> Port
+    - 0 -> None
+    - 1 -> Starboard
+
+### Commands
+
+Commands are sent with a string where the first letter is the command and the rest parameters
+
+  - E -> Engage
+  - D -> Disengage
+  - C<angle> -> Set Command to <angle>
+  - M<int> -> Set Mode. See modes before
+  - TP -> Tack port
+  - TS -> Tack Starboard
+  - X -> Cancel Tack
+  - RP -> Rudder to Port (value 1.0)
+  - RS -> Rudder to Starboard (value 1.0)
+  - Z<angle> -> Set rudder angle to <angle>
+
