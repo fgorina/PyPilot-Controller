@@ -15,7 +15,6 @@
 #include <BLEUtils.h>
 #include <BLEServer.h>
 
-
 // Version
 
 static const char *version = "v 0.0.3";
@@ -57,8 +56,6 @@ static int color = GREEN;
 static int selectedColor = DARKGREEN;
 static int emphasisColor = RED;
 
-
-
 Preferences preferences;
 void writePreferences();
 void readPreferences();
@@ -68,12 +65,11 @@ void setStateCharacteristicRudder(float rudder_angle);
 void setStateCharacteristicHeading(float heading);
 void setStateCharacteristicCommand(float command);
 void setStateCharacteristicEnabled(int state);
-void setStateCharacteristicTackState(int  tackState);
-void setStateCharacteristicTackDirection(int  tackDirection);
-void setStateCharacteristicMode(int  mode);
+void setStateCharacteristicTackState(int tackState);
+void setStateCharacteristicTackDirection(int tackDirection);
+void setStateCharacteristicMode(int mode);
 
 #include "net_mdns.h"
-
 
 typedef struct _NetClient
 {
@@ -121,9 +117,9 @@ int prev_y = -1;
 static unsigned long last_touched;
 static m5::touch_state_t prev_state;
 
-#define DISPLAY_ACTIVE  0
+#define DISPLAY_ACTIVE 0
 #define DISPLAY_SLEEPING 1
-#define DISPLAY_WAKING  2
+#define DISPLAY_WAKING 2
 
 static int displaySaver = DISPLAY_ACTIVE;
 
@@ -134,63 +130,71 @@ static int displaySaver = DISPLAY_ACTIVE;
 static int aboutToTackState = ABOUT_TO_TACK_NONE;
 static bool selectingMode = false;
 
-
-
 #include "menu_encoder.h"
 
 // Funcions per connectar-se per BLE
-void setStateCharacteristicRudder(float rudder_angle) {
+void setStateCharacteristicRudder(float rudder_angle)
+{
   sprintf(buffer, "R%.0f", rudder_angle);
 
   stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
   stateCharacteristic->notify();
 }
-void setStateCharacteristicHeading(float heading) {
+void setStateCharacteristicHeading(float heading)
+{
   sprintf(buffer, "H%.0f", heading);
 
   stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
   stateCharacteristic->notify();
 }
 
-void setStateCharacteristicCommand(float command) {
+void setStateCharacteristicCommand(float command)
+{
   sprintf(buffer, "C%.0f", command);
 
   stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
   stateCharacteristic->notify();
 }
 
-void setStateCharacteristicEnabled(int state) {
+void setStateCharacteristicEnabled(int state)
+{
 
-  if(state == 1){
+  if (state == 1)
+  {
     sprintf(buffer, "E");
-  }else{
+  }
+  else
+  {
     sprintf(buffer, "D");
   }
   stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
   stateCharacteristic->notify();
 }
 
-void setStateCharacteristicTackState(int  tackState){
+void setStateCharacteristicTackState(int tackState)
+{
   sprintf(buffer, "T%d", tackState);
 
   stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
   stateCharacteristic->notify();
 }
-void setStateCharacteristicTackDirection(int  tackDirection){
+void setStateCharacteristicTackDirection(int tackDirection)
+{
   sprintf(buffer, "U%d", tackDirection);
 
   stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
   stateCharacteristic->notify();
 }
 
-void setStateCharacteristicMode(int  mode){
+void setStateCharacteristicMode(int mode)
+{
 
   sprintf(buffer, "M%i", mode);
 
   stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
   stateCharacteristic->notify();
-  USBSerial.print("Sending "); USBSerial.println(buffer);
-
+  USBSerial.print("Sending ");
+  USBSerial.println(buffer);
 }
 // Fi BLE
 
@@ -257,15 +261,17 @@ const char *modeString(ap_mode_e mode)
 }
 // COLORS
 
-void setDayColor(){
+void setDayColor()
+{
   color = GREEN;
   selectedColor = DARKGREEN;
   emphasisColor = RED;
 }
 
-void setNightColor(){
+void setNightColor()
+{
   color = RED;
-  selectedColor = lgfx::v1::color565(128,0,0);
+  selectedColor = lgfx::v1::color565(128, 0, 0);
   emphasisColor = GREEN;
 }
 // WiFI
@@ -316,7 +322,7 @@ boolean startWiFi()
     M5Dial.Display.drawString("PyPilot", LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2 + 16);
     M5Dial.Display.drawString(pypilot_tcp_host.toString(), LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2 + 44);
     delay(1000);
-   
+
     pypilot_begin(pypClient, pypilot_tcp_host, pypilot_tcp_port); // Connect to the PyPilot TCP server
     M5Dial.Display.setFont(&fonts::Orbitron_Light_32);
 
@@ -402,7 +408,6 @@ void drawDetailScreen()
 {
   char buffer[128];
 
- 
   M5Dial.Display.setTextSize(1);
   M5Dial.Display.clear(BLACK);
 
@@ -414,7 +419,6 @@ void drawDetailScreen()
 
   sprintf(buffer, "T: %.1f", shipDataModel.steering.autopilot.ap_servo.controller_temp.deg_C);
   M5Dial.Display.drawString(buffer, M5Dial.Display.width() / 2, M5Dial.Display.height() / 4 * 3);
-
 }
 
 void drawReconnectingScreen()
@@ -444,11 +448,12 @@ void drawScreen()
     if (rudderMode)
     {
       drawRudderScreen();
-    }else if (detailMode)
+    }
+    else if (detailMode)
     {
       drawDetailScreen();
-
-    } else
+    }
+    else
     {
       drawStandbyScreen();
     }
@@ -557,7 +562,6 @@ bool doRudder()
 
   return redraw;
 }
-
 
 bool doDetail()
 {
@@ -751,10 +755,14 @@ bool doStandby()
 {
   bool doRedraw = false;
 
-  if(M5Dial.BtnA.wasReleasedAfterHold()){
-    if (color == GREEN){
-      setNightColor();    
-    }else{
+  if (M5Dial.BtnA.wasReleasedAfterHold())
+  {
+    if (color == GREEN)
+    {
+      setNightColor();
+    }
+    else
+    {
       setDayColor();
     }
     doRedraw = true;
@@ -861,13 +869,14 @@ bool doStandby()
       }
     }
     doRedraw = true;
-  }else if (t.state == T_HOLD_END){
+  }
+  else if (t.state == T_HOLD_END)
+  {
     rudderMode = false;
     detailMode = true;
     doRedraw = true;
   }
 
-  
   if (M5Dial.BtnA.wasPressed())
   {
     M5Dial.Speaker.tone(2000, 100, 0, false);
@@ -885,6 +894,8 @@ bool doStandby()
 
       pypilot_send_engage(pypClient.c);
       pypilot_send_mode(pypClient.c, AP_MODE_COMPASS);
+      edit_heading = shipDataModel.steering.autopilot.heading.deg;
+      commitSteering(0);
       break;
       // shipDataModel.steering.autopilot.ap_state.st = ap_state_e::ENGAGED; // Send  data to pypilot
       // shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::HEADING_MAG;
@@ -892,16 +903,22 @@ bool doStandby()
     case 1: // GPS
       pypilot_send_engage(pypClient.c);
       pypilot_send_mode(pypClient.c, AP_MODE_GPS);
+      edit_heading = shipDataModel.steering.autopilot.heading.deg;
+      commitSteering(0);
       break;
 
     case 2: // Wind
       pypilot_send_engage(pypClient.c);
       pypilot_send_mode(pypClient.c, AP_MODE_WIND);
+      edit_heading = shipDataModel.steering.autopilot.heading.deg;
+      commitSteering(0);
       break;
 
     case 3: // True Wind
       pypilot_send_engage(pypClient.c);
       pypilot_send_mode(pypClient.c, AP_MODE_WIND_TRUE);
+      edit_heading = shipDataModel.steering.autopilot.heading.deg;
+      commitSteering(0);
       break;
 
     case 4: // Rudder
@@ -954,28 +971,37 @@ bool loopTask()
     {
       displaySaver = DISPLAY_WAKING;
       return false;
-    }else{
-      last_touched = 0;
-      return false;
     }
-  }else if(displaySaver == DISPLAY_WAKING){
-     auto t = M5Dial.Touch.getDetail();
-    if (!M5Dial.BtnA.isPressed() && t.state == T_NONE){
-      last_touched = millis();
-      return true;
-    }else{
+    else
+    {
       last_touched = 0;
       return false;
     }
   }
-  else 
+  else if (displaySaver == DISPLAY_WAKING)
+  {
+    auto t = M5Dial.Touch.getDetail();
+    if (!M5Dial.BtnA.isPressed() && t.state == T_NONE)
+    {
+      last_touched = millis();
+      return true;
+    }
+    else
+    {
+      last_touched = 0;
+      return false;
+    }
+  }
+  else
   {
     if (shipDataModel.steering.autopilot.ap_state.st == ap_state_e::STANDBY)
     {
       if (rudderMode)
       {
         return doRudder();
-      }else if(detailMode){
+      }
+      else if (detailMode)
+      {
         return doDetail();
       }
       else
@@ -1007,11 +1033,11 @@ void writePreferences()
 {
   preferences.begin("m5dial_pypilot", false);
   preferences.clear();
- /* preferences.remove("SSID");
-  preferences.remove("PASSWD");
-  preferences.remove("PPHOST");
-  preferences.remove("PPPORT");
-  */
+  /* preferences.remove("SSID");
+   preferences.remove("PASSWD");
+   preferences.remove("PPHOST");
+   preferences.remove("PPPORT");
+   */
 
   preferences.putString("SSID", wifi_ssid);
   preferences.putString("PASSWD", wifi_password);
@@ -1023,46 +1049,45 @@ void writePreferences()
   USBSerial.println(pypilot_tcp_host.toString());
 }
 
-void lookupPypilot(){
-   M5Dial.Display.clear(BLACK);
-    M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
-    M5Dial.Display.drawString("Searching", LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2);
+void lookupPypilot()
+{
+  M5Dial.Display.clear(BLACK);
+  M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
+  M5Dial.Display.drawString("Searching", LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2);
 
-
-  if (pypilot_tcp_host.toString() == "0.0.0.0" || pypilot_tcp_port <= 0) {
+  if (pypilot_tcp_host.toString() == "0.0.0.0" || pypilot_tcp_port <= 0)
+  {
     USBSerial.println("Cercant pypilot");
-      mdns_begin();
-      int n = mdns_query_svc("pypilot", "tcp");
-      if (n > 0) {
-        pypilot_tcp_host = MDNS.IP(0);
-        pypilot_tcp_port = MDNS.port(0);
-        USBSerial.print("Trobat Pyilot at ");
-        USBSerial.print(pypilot_tcp_host.toString());
-        USBSerial.print(" port ");
-        USBSerial.println(pypilot_tcp_port);
-        writePreferences();
-
-
-      }else{
-        pypilot_tcp_host = IPAddress(192, 168, 1, 148);
-        pypilot_tcp_port = 23322;
-        USBSerial.print("Trobat Pyilot at ");
-        USBSerial.print(pypilot_tcp_host.toString());
-        USBSerial.print(" port ");
-        USBSerial.println(pypilot_tcp_port);
-        writePreferences();
-
-
-
-        USBSerial.println("No he trobat pypilot");
-      }
-      mdns_end();
+    mdns_begin();
+    int n = mdns_query_svc("pypilot", "tcp");
+    if (n > 0)
+    {
+      pypilot_tcp_host = MDNS.IP(0);
+      pypilot_tcp_port = MDNS.port(0);
+      USBSerial.print("Trobat Pyilot at ");
+      USBSerial.print(pypilot_tcp_host.toString());
+      USBSerial.print(" port ");
+      USBSerial.println(pypilot_tcp_port);
+      writePreferences();
     }
+    else
+    {
+      pypilot_tcp_host = IPAddress(192, 168, 1, 148);
+      pypilot_tcp_port = 23322;
+      USBSerial.print("Trobat Pyilot at ");
+      USBSerial.print(pypilot_tcp_host.toString());
+      USBSerial.print(" port ");
+      USBSerial.println(pypilot_tcp_port);
+      writePreferences();
+
+      USBSerial.println("No he trobat pypilot");
+    }
+    mdns_end();
+  }
 }
 
 void readPreferences()
 {
-
 
   preferences.begin("m5dial_pypilot", true);
   wifi_ssid = preferences.getString("SSID", wifi_ssid);
@@ -1074,7 +1099,8 @@ void readPreferences()
   USBSerial.print(" Read from Preferences ");
   USBSerial.println(pypilot_tcp_host.toString());
 
-  if(M5Dial.BtnA.isPressed()){
+  if (M5Dial.BtnA.isPressed())
+  {
     USBSerial.println("Resetting PyPilot Host");
 
     pypilot_tcp_port = 0;
@@ -1082,11 +1108,11 @@ void readPreferences()
     M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
     M5Dial.Display.drawString("Cleared Host", LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2);
     delay(5000);
-
-  }else{
+  }
+  else
+  {
     USBSerial.println(pypilot_tcp_host.toString());
   }
-
 }
 
 void setup()
@@ -1102,12 +1128,13 @@ void setup()
 
   M5Dial.Speaker.setVolume(128);
   last_touched = millis();
-  
+
   setup_ble();
 }
 // Encoder dona 64 / volta
 
 #define GO_SLEEP_TIMEOUT 600000ul // 50 '
+
 void loop()
 {
 
