@@ -17,7 +17,7 @@
 
 // Version
 
-static const char *version = "v 0.0.3";
+static const char *version = "v 0.0.4";
 
 // Define states
 
