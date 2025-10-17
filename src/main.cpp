@@ -542,19 +542,22 @@ bool doRudder()
   }
 
   auto t = M5Dial.Touch.getDetail();
-  if (t.state == T_TOUCH_BEGIN)
+  if (t.state == T_HOLD_BEGIN)
   {
     last_touched = millis();
-    M5Dial.Speaker.tone(2000, 100, 0, false);
+     M5Dial.Speaker.tone(2000, 100, 0, false);
   }
-  if (t.state == T_TOUCH_END)
+  if (t.state == T_HOLD_END)
   {
-    last_touched = millis();
-    M5Dial.Speaker.tone(1000, 100, 0, false);
-    edit_position = 0.0;
-    updateRudder = true;
-    sendRudderCommand();
-    redraw = true;
+
+    
+      last_touched = millis();
+      M5Dial.Speaker.tone(1000, 100, 0, false);
+      edit_position = 0.0;
+      updateRudder = true;
+      sendRudderCommand();
+      redraw = true;
+    
   }
 
   redraw = redraw || menu_encoder_update(doUpdateRudder, commitRudder);
@@ -793,15 +796,18 @@ bool doStandby()
   auto t = M5Dial.Touch.getDetail();
   oldPosition = M5Dial.Encoder.read();
 
-  if (t.state == T_TOUCH_BEGIN)
+  bool enable_touch = true;
+/*
+  if (t.state == T_TOUCH_BEGIN && enable_touch)
   {
     M5Dial.Speaker.tone(2000, 100, 0, false);
   }
-  if (t.state == T_HOLD_BEGIN)
+  */
+  if (t.state == T_HOLD_BEGIN && enable_touch)
   {
     M5Dial.Speaker.tone(3000, 100, 0, false);
   }
-  if (t.state == T_TOUCH_END)
+  if (t.state == T_HOLD_END && enable_touch)
   {
     M5Dial.Speaker.tone(1000, 100, 0, false);
     // Check if in the center.
@@ -870,12 +876,14 @@ bool doStandby()
     }
     doRedraw = true;
   }
-  else if (t.state == T_HOLD_END)
+  /*
+  else if (t.state == T_HOLD_END && enable_touch)
   {
     rudderMode = false;
     detailMode = true;
     doRedraw = true;
   }
+  */
 
   if (M5Dial.BtnA.wasPressed())
   {
@@ -910,15 +918,15 @@ bool doStandby()
     case 2: // Wind
       pypilot_send_engage(pypClient.c);
       pypilot_send_mode(pypClient.c, AP_MODE_WIND);
-      edit_heading = shipDataModel.steering.autopilot.heading.deg;
-      commitSteering(0);
+      //edit_heading = shipDataModel.steering.autopilot.heading.deg;
+      //commitSteering(0);
       break;
 
     case 3: // True Wind
       pypilot_send_engage(pypClient.c);
       pypilot_send_mode(pypClient.c, AP_MODE_WIND_TRUE);
-      edit_heading = shipDataModel.steering.autopilot.heading.deg;
-      commitSteering(0);
+      //edit_heading = shipDataModel.steering.autopilot.heading.deg;
+      //commitSteering(0);
       break;
 
     case 4: // Rudder
