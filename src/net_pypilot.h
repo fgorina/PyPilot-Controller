@@ -44,21 +44,21 @@ extern "C" {
       client.println(F("watch={\"ap.tack.state\":0.5}"));
       client.println(F("watch={\"ap.tack.direction\":1}"));
       client.println(F("watch={\"rudder.angle\":0}"));
-      client.flush();
+      // client.flush();
     }
   }
 
   void pypilot_send_engage(WiFiClient& client) {
     if (client.connected()) {
       client.println(F("ap.enabled=true"));
-      client.flush();
+      // client.flush();
     }
   }
 
   void pypilot_send_disengage(WiFiClient& client) {
     if (client.connected()) {
       client.println(F("ap.enabled=false"));
-      client.flush();
+      // client.flush();
     }
   }
 
@@ -67,7 +67,7 @@ extern "C" {
       USBSerial.print("Sending heading "); USBSerial.println(round(heading));
       client.print(F("ap.heading_command="));
       client.println(String(heading, 1));
-      client.flush();
+      // client.flush();
     }
   }
 
@@ -78,7 +78,7 @@ extern "C" {
       //USBSerial.print("Sending rudderCommand "); USBSerial.println(String(command, 2));
       client.print(F("servo.command="));
       client.println(String(command, 2));
-      client.flush();
+      // client.flush();
     }
   }
 
@@ -88,7 +88,7 @@ extern "C" {
       USBSerial.print("Sending rudder Position "); USBSerial.println(String(pos, 2));
       client.print(F("servo.position_command="));
       client.println(String(lpos, 2));
-      client.flush();
+      // client.flush();
     }
   }
 
@@ -99,7 +99,7 @@ extern "C" {
       client.print(String(direction));
       client.println("\"");
       client.println(F("ap.tack.state=\"begin\""));
-      client.flush();
+      // client.flush();
     }
   }
 
@@ -107,7 +107,7 @@ extern "C" {
     if (client.connected()) {
 
       client.println(F("ap.tack.state=\"none\""));
-      client.flush();
+      // client.flush();
     }
   }
 
@@ -124,7 +124,7 @@ extern "C" {
       } else {
         client.println(F("ap.mode=\"compass\""));
       }
-      client.flush();
+      // client.flush();
     }
   }
 
