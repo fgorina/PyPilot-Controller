@@ -17,7 +17,7 @@
 
 // Version
 
-static const char *version = "v 0.0.4";
+static const char *version = "v 0.0.5";
 
 // Define states
 
@@ -580,7 +580,15 @@ bool doDetail()
 
 void updateSteering(long count)
 {
-  edit_heading = shipDataModel.steering.autopilot.command.deg + (count * 1.0);
+
+  if (shipDataModel.steering.autopilot.ap_mode.mode == ap_mode_e::APP_WIND ||
+    shipDataModel.steering.autopilot.ap_mode.mode == ap_mode_e::APP_WIND_MAG ||
+    shipDataModel.steering.autopilot.ap_mode.mode == ap_mode_e::APP_WIND_TRUE ){
+        edit_heading = shipDataModel.steering.autopilot.command.deg - (count * 1.0);
+    }else{
+      edit_heading = shipDataModel.steering.autopilot.command.deg + (count * 1.0);
+    }
+  
 
   if (shipDataModel.steering.autopilot.ap_mode.mode == ap_mode_e::HEADING_MAG ||
       shipDataModel.steering.autopilot.ap_mode.mode == ap_mode_e::COG_TRUE)
@@ -599,12 +607,12 @@ void updateSteering(long count)
   {
     if (edit_heading < -180)
     {
-      edit_heading = 180.0;
+      edit_heading = edit_heading + 360.0;
     }
 
-    if (edit_heading >= 179)
+    if (edit_heading >= 180)
     {
-      edit_heading = 179;
+      edit_heading = edit_heading - 360.0;
     }
   }
 }
@@ -855,8 +863,8 @@ bool doStandby()
         USBSerial.println("Selected True Wind");
         pypilot_send_engage(pypClient.c);
         pypilot_send_mode(pypClient.c, AP_MODE_WIND_TRUE);
-        edit_heading = shipDataModel.steering.autopilot.heading.deg;
-        commitSteering(0);
+       // edit_heading = shipDataModel.steering.autopilot.heading.deg;
+       // commitSteering(0);
         shipDataModel.steering.autopilot.ap_state.st = ap_state_e::ENGAGED; // Send  data to pypilot
         shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::TRUE_WIND;
         selectedOption = 3;
@@ -867,8 +875,8 @@ bool doStandby()
         oldPosition = M5Dial.Encoder.read();
         pypilot_send_engage(pypClient.c);
         pypilot_send_mode(pypClient.c, AP_MODE_WIND);
-        edit_heading = shipDataModel.steering.autopilot.heading.deg;
-        commitSteering(0);
+       //edit_heading = shipDataModel.steering.autopilot.heading.deg;
+       // commitSteering(0);
         shipDataModel.steering.autopilot.ap_state.st = ap_state_e::ENGAGED; // Send  data to pypilot
         shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::APP_WIND;
         selectedOption = 2;
