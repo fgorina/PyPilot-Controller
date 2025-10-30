@@ -1173,12 +1173,14 @@ void loop()
     last_touched = 0;
     displaySaver = DISPLAY_SLEEPING;
     M5Dial.Display.sleep(); // powerSaveOn();
+    M5Dial.Display.setBrightness(0);
   }
   else if (last_touched != 0 && displaySaver == DISPLAY_WAKING)
   {
     USBSerial.println("Waking Up");
     displaySaver = DISPLAY_ACTIVE;
     M5Dial.Display.wakeup(); // powerSaveOff();
+    M5Dial.Display.setBrightness(255);
     redraw = true;
   }
 
