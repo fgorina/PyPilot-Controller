@@ -82,7 +82,7 @@ int  modeToInt(ap_mode_e mode){
         }
         setStateCharacteristicTackState(shipDataModel.steering.autopilot.tack.st);
 
-        USBSerial.print("Tack State "); USBSerial.print(shipDataModel.steering.autopilot.tack.st); USBSerial.print(" "); USBSerial.println(state);
+        Serial.print("Tack State "); Serial.print(shipDataModel.steering.autopilot.tack.st); Serial.print(" "); Serial.println(state);
         redraw = redraw || (oldState != shipDataModel.steering.autopilot.tack.st);
         
       }else if (dataFeed.startsWith("ap.tack.direction=\"")) {
@@ -95,13 +95,13 @@ int  modeToInt(ap_mode_e mode){
           shipDataModel.steering.autopilot.tack.direction = ap_tack_direction_e::TACKING_TO_STARBOARD;
         }
         setStateCharacteristicTackDirection(shipDataModel.steering.autopilot.tack.direction);
-        //USBSerial.print("Tack Direction "); USBSerial.print(shipDataModel.steering.autopilot.tack.direction); USBSerial.print(" ");USBSerial.println(direction);
+        //Serial.print("Tack Direction "); Serial.print(shipDataModel.steering.autopilot.tack.direction); Serial.print(" ");Serial.println(direction);
         redraw = redraw || (oldDirection != shipDataModel.steering.autopilot.tack.direction);
 
       }else if (dataFeed.startsWith("ap.mode=\"")) {
         ap_mode_e oldMode = shipDataModel.steering.autopilot.ap_mode.mode;
         String mode = dataFeed.substring(strlen("ap.mode=\""), dataFeed.length() - 1);
-        USBSerial.print("Received "); USBSerial.println(mode);
+        Serial.print("Received "); Serial.println(mode);
         shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::MODE_NA;
         shipDataModel.steering.autopilot.ap_mode.age = millis();
         int localMode = 0;

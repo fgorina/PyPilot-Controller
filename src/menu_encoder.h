@@ -22,7 +22,7 @@ extern "C"
             M5Dial.Speaker.tone(3000, 30, 0, true);
             if (menu_encoder_last_movement == 0)
             { // First Movement
-                USBSerial.println("Starting Encoder");
+                Serial.println("Starting Encoder");
                 menu_encoder_init_value = newPosition;
             }
             else
@@ -38,7 +38,7 @@ extern "C"
         {
             if ((millis() - menu_encoder_last_movement) > menu_encoder_timeout)
             {
-                USBSerial.println("Calling Submit");               
+                Serial.println("Calling Submit");               
                 onSubmit(old_position - menu_encoder_init_value);
                 menu_encoder_last_movement = 0;
                 return true;

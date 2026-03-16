@@ -46,7 +46,7 @@ void doCommand(String command){
     pypilot_send_disengage(pypClient.c);
   }else if (s == 'M'){
     String mode = command.substring(1);
-    USBSerial.print("Setting mode to "); USBSerial.println(mode);
+    Serial.print("Setting mode to "); Serial.println(mode);
     if(mode == "rudder"){
       pypilot_send_disengage(pypClient.c);
     }else{
@@ -64,7 +64,7 @@ void doCommand(String command){
   } else if(s == 'C'){
     String s_value = command.substring(1);
     float heading = atof(s_value.c_str());
-     USBSerial.print("Setting command to "); USBSerial.println(s_value);
+     Serial.print("Setting command to "); Serial.println(s_value);
     pypilot_send_command(pypClient.c, heading);
   }else if (s ==  'T'){
     char direction = command[1];
@@ -92,7 +92,7 @@ void doCommand(String command){
       String s_value = command.substring(1);
 
       float angle = atof(s_value.c_str());
-      USBSerial.print("Setting rudder angle to "); USBSerial.println(s_value);
+      Serial.print("Setting rudder angle to "); Serial.println(s_value);
       edit_position = angle;
     }else{
       edit_position = 0.0;
@@ -114,22 +114,22 @@ void doCommand(String command){
 class MyCallbacks : public BLECharacteristicCallbacks {
 
   void onWrite(BLECharacteristic *pCharacteristic) {
-    std::string uuid = pCharacteristic->getUUID().toString();
-    std::string value = pCharacteristic->getValue();
+    std::string uuid = pCharacteristic->getUUID().toString().c_str();
+    std::string value = pCharacteristic->getValue().c_str();
     if (value.length() > 0) {
         if (uuid == WIFI_NAME_UUID){
-            USBSerial.print("Wifi name: "); USBSerial.println(value.c_str());
+            Serial.print("Wifi name: "); Serial.println(value.c_str());
 
             wifi_ssid = String(value.c_str());
             
         }else if (uuid == WIFI_PASSWORD_UUID){
-            USBSerial.print("Wifi pwd: "); USBSerial.println(value.c_str());           
+            Serial.print("Wifi pwd: "); Serial.println(value.c_str());           
             wifi_password = String(value.c_str());
             pypilot_tcp_port = 0;
             writePreferences();
             WiFi.disconnect();
          }else if (uuid == COMMAND_UUID){
-            USBSerial.print("Command received: "); USBSerial.println(value.c_str());        
+            Serial.print("Command received: "); Serial.println(value.c_str());        
             doCommand(String(value.c_str()));
          }
     } 
@@ -142,13 +142,13 @@ MyCallbacks* characteristicCallback = new MyCallbacks();
 
 class MyServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer *pServer) {
-    USBSerial.println("Connected to BLE central");
+    Serial.println("Connected to BLE central");
     deviceConnected = true;
     BLEDevice::stopAdvertising();
   };
 
   void onDisconnect(BLEServer *pServer) {
-    USBSerial.println("Disconnected from BLE central");
+    Serial.println("Disconnected from BLE central");
     deviceConnected = false;
     BLEDevice::startAdvertising();
   }
@@ -158,7 +158,7 @@ class MyServerCallbacks : public BLEServerCallbacks {
 
 
 void setup_ble() {
-  USBSerial.println("Starting BLE work!");
+  Serial.println("Starting BLE work!");
 
   BLEDevice::init("PyPilot");
   BLEServer *pServer = BLEDevice::createServer();
