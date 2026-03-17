@@ -21,6 +21,7 @@ watch={"servo.controller_temp":1}
 watch={"servo.voltage":1}
 
 */
+#define PYPILOT_TIMEOUT 1000
 
 static const char *PROGMEM AP_MODE_COMPASS = "MODE (Compass)";
 static const char *PROGMEM AP_MODE_GPS = "MODE (GPS)";
@@ -131,7 +132,7 @@ void pypilot_send_mode(WiFiClient &client, const char *mode) {
     // client.flush();
   }
 }
-
+/*
 void setup_pypilot_reconnect(NetClient &client, IPAddress host, int port) {
   app.onRepeat(7000, [&client, host, port]() {
     if (!client.c.connected()) {
@@ -160,13 +161,13 @@ void pypilot_subscribe(NetClient &client) {
   app.onAvailable(client.c, [&client]() {
     while (client.c.connected() &&
            client.c.available() >
-               12 /* Very important for performance and responsiveness */) {
+               12 ) {
 
       bool found = pypilot_parse(client.c);
       if (found) {
         client.lastActivity = millis();
 
-        break; /* Very important for performance and responsiveness */
+        break; 
       }
     }
   });
@@ -185,6 +186,52 @@ void pypilot_begin(NetClient &pypClient, IPAddress pyp_host, int pyp_port) {
     pypilot_greet(pypClient.c);
   } else {
     Serial.println("Failed to connect to pypilot in begin");
+  }
+}
+*/
+
+volatile bool connecting = false;
+void netPylotTask(void *param) {
+  for (;;) {
+    // Stage 1: WiFi
+
+    if (WiFi.status() != WL_CONNECTED) {
+
+      if (!connecting) {
+        Serial.printf("Connecting to %s / %s\n", wifi_ssid.c_str(), wifi_password.c_str());
+        WiFi.begin(wifi_ssid.c_str(), wifi_password.c_str());
+        connecting = true;
+      }else{
+        vTaskDelay(pdMS_TO_TICKS(500));
+      }
+    } else {      
+      if(connecting){ 
+         Serial.printf("Connected to WiFi %s\n", wifi_ssid.c_str());
+        connecting = false;
+    }
+      if (!pypClient.c.connected()) {
+        lookupPypilot();
+        if (!pypClient.c.connect(pypilot_tcp_host, pypilot_tcp_port)) {
+          vTaskDelay(pdMS_TO_TICKS(2000));
+          continue;
+        }
+        Serial.printf("Connected to PyPilot %s:%d\n", pypilot_tcp_host, pypilot_tcp_port);
+        pypClient.lastActivity = millis();
+        pypilot_greet(pypClient.c);
+      } else {
+        if (pypClient.c.available() > 12) {
+          String line = pypClient.c.readStringUntil('\n');
+          pypilot_parse(line);
+          pypClient.lastActivity = millis();
+        }
+
+        if (millis() - pypClient.lastActivity > PYPILOT_TIMEOUT) {
+          pypClient.c.stop();
+          continue;
+        }
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(20));
   }
 }
 

@@ -6,15 +6,15 @@
 #include <M5Dial.h>
 #include <Preferences.h>
 
-#include <WiFi.h>
+#include <ArduinoJson.h>
 #include <ESPmDNS.h>
 #include <HTTPClient.h>
-#include <ArduinoJson.h>
-//#include <ReactESP.h> // https://github.com/mairas/ReactESP.  
+#include <WiFi.h>
+// #include <ReactESP.h> // https://github.com/mairas/ReactESP.
 
 #include <BLEDevice.h>
-#include <BLEUtils.h>
 #include <BLEServer.h>
+#include <BLEUtils.h>
 
 // Version
 
@@ -42,14 +42,15 @@ static const char *version = "v 0.0.5";
 
 static constexpr const char *state_name[16] = {
     "none", "touch", "touch_end", "touch_begin",
-    "___", "hold", "hold_end", "hold_begin",
-    "___", "flick", "flick_end", "flick_begin",
-    "___", "drag", "drag_end", "drag_begin"};
+    "___",  "hold",  "hold_end",  "hold_begin",
+    "___",  "flick", "flick_end", "flick_begin",
+    "___",  "drag",  "drag_end",  "drag_begin"};
 
 static bool redraw = true;
 
-static String wifi_ssid = "elrond";      // Store the name of the wireless network.
-static String wifi_password = "ailataN1991"; // Store the password of the wireless network.
+static String wifi_ssid = "elrond"; // Store the name of the wireless network.
+static String wifi_password =
+    "ailataN1991"; // Store the password of the wireless network.
 static IPAddress pypilot_tcp_host = IPAddress(192, 168, 1, 3);
 static int pypilot_tcp_port = 23322;
 
@@ -72,8 +73,7 @@ void setStateCharacteristicMode(int mode);
 
 #include "net_mdns.h"
 
-typedef struct _NetClient
-{
+typedef struct _NetClient {
   WiFiClient c = WiFiClient();
   unsigned long lastActivity = 0U;
 } NetClient;
@@ -86,9 +86,6 @@ static ship_data_t shipDataModel;
 
 #include "keepalive.h"
 
-using namespace reactesp;
-ReactESP app;
-
 boolean startWiFi();
 
 #define MAX_RUDDER 30
@@ -100,6 +97,7 @@ static bool detailMode = false; // Detail Mode is for special info for Autopilot
 
 #include "pypilot_parse.h"
 #include "net_pypilot.h"
+
 
 static constexpr const char *modes[4] = {"compass", "gps", "wind", "true wind"};
 static int edit_mode = 0;
@@ -134,61 +132,51 @@ static bool selectingMode = false;
 #include "menu_encoder.h"
 
 // Funcions per connectar-se per BLE
-void setStateCharacteristicRudder(float rudder_angle)
-{
+void setStateCharacteristicRudder(float rudder_angle) {
   sprintf(buffer, "R%.0f", rudder_angle);
 
   stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
   stateCharacteristic->notify();
 }
-void setStateCharacteristicHeading(float heading)
-{
+void setStateCharacteristicHeading(float heading) {
   sprintf(buffer, "H%.0f", heading);
 
   stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
   stateCharacteristic->notify();
 }
 
-void setStateCharacteristicCommand(float command)
-{
+void setStateCharacteristicCommand(float command) {
   sprintf(buffer, "C%.0f", command);
 
   stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
   stateCharacteristic->notify();
 }
 
-void setStateCharacteristicEnabled(int state)
-{
+void setStateCharacteristicEnabled(int state) {
 
-  if (state == 1)
-  {
+  if (state == 1) {
     sprintf(buffer, "E");
-  }
-  else
-  {
+  } else {
     sprintf(buffer, "D");
   }
   stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
   stateCharacteristic->notify();
 }
 
-void setStateCharacteristicTackState(int tackState)
-{
+void setStateCharacteristicTackState(int tackState) {
   sprintf(buffer, "T%d", tackState);
 
   stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
   stateCharacteristic->notify();
 }
-void setStateCharacteristicTackDirection(int tackDirection)
-{
+void setStateCharacteristicTackDirection(int tackDirection) {
   sprintf(buffer, "U%d", tackDirection);
 
   stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
   stateCharacteristic->notify();
 }
 
-void setStateCharacteristicMode(int mode)
-{
+void setStateCharacteristicMode(int mode) {
 
   sprintf(buffer, "M%i", mode);
 
@@ -199,10 +187,8 @@ void setStateCharacteristicMode(int mode)
 }
 // Fi BLE
 
-int modeIndex(ap_mode_e mode)
-{
-  switch (mode)
-  {
+int modeIndex(ap_mode_e mode) {
+  switch (mode) {
   case ap_mode_e::HEADING_MAG:
     return 0;
     break;
@@ -223,10 +209,8 @@ int modeIndex(ap_mode_e mode)
   }
 }
 
-const char *modeCommand(int idx)
-{
-  switch (idx)
-  {
+const char *modeCommand(int idx) {
+  switch (idx) {
   case 0:
     return AP_MODE_COMPASS;
     break;
@@ -247,42 +231,34 @@ const char *modeCommand(int idx)
     break;
   }
 }
-const char *modeString(ap_mode_e mode)
-{
+const char *modeString(ap_mode_e mode) {
   int idx = modeIndex(mode);
 
-  if (idx < 0 || idx > 3)
-  {
+  if (idx < 0 || idx > 3) {
     return "error";
-  }
-  else
-  {
+  } else {
     return modes[idx];
   }
 }
 // COLORS
 
-void setDayColor()
-{
+void setDayColor() {
   color = GREEN;
   selectedColor = DARKGREEN;
   emphasisColor = RED;
 }
 
-void setNightColor()
-{
+void setNightColor() {
   color = RED;
   selectedColor = lgfx::v1::color565(128, 0, 0);
   emphasisColor = GREEN;
 }
 // WiFI
-boolean checkConnection()
-{                // Check wifi connection.
-  int count = 0; // count.
-  while (count < 30)
-  { // If you fail to connect to wifi within 30*350ms (10.5s), return false; otherwise return true.
-    if (WiFi.status() == WL_CONNECTED)
-    {
+boolean checkConnection() { // Check wifi connection.
+  int count = 0;            // count.
+  while (count < 30) {      // If you fail to connect to wifi within 30*350ms
+                            // (10.5s), return false; otherwise return true.
+    if (WiFi.status() == WL_CONNECTED) {
       return true;
     }
     delay(350);
@@ -291,14 +267,15 @@ boolean checkConnection()
   return false;
 }
 
-boolean startWiFi()
-{ // Check whether there is wifi configuration information storage, if there is return 1, if no return 0.
+boolean startWiFi() { // Check whether there is wifi configuration information
+                      // storage, if there is return 1, if no return 0.
 
-  M5.Display.clear(BLACK);
-  M5.Display.setFont(&fonts::Orbitron_Light_24);
-  M5.Display.drawString("Connecting to ", LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2 - 16);
-  M5.Display.setFont(&fonts::Orbitron_Light_32);
-  M5.Display.drawString(wifi_ssid, LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2 + 16);
+  M5Dial.Display.clear(BLACK);
+  M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
+  M5Dial.Display.drawString("Connecting to ", LV_HOR_RES_MAX / 2,
+                        LV_HOR_RES_MAX / 2 - 16);
+  M5Dial.Display.setFont(&fonts::Orbitron_Light_32);
+  M5Dial.Display.drawString(wifi_ssid, LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2 + 16);
 
   // WiFi.setAutoConnect(true);
   WiFi.setAutoReconnect(true);
@@ -307,213 +284,231 @@ boolean startWiFi()
   Serial.print(" ");
   Serial.println(wifi_password);
   WiFi.begin(wifi_ssid.c_str(), wifi_password.c_str());
-  if (checkConnection())
-  {
+  if (checkConnection()) {
     Serial.print("Connected to ");
     Serial.print(wifi_ssid);
     Serial.print(" IP ");
     Serial.println(WiFi.localIP());
 
-    M5.Display.clear(BLACK);
+    M5Dial.Display.clear(BLACK);
 
-    M5.Display.drawString("Connected to to ", LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2 - 16);
-    M5.Display.drawString(wifi_ssid, LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2 + 16);
-    M5.Display.drawString(WiFi.localIP().toString(), LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2 + 48);
+    M5Dial.Display.drawString("Connected to to ", LV_HOR_RES_MAX / 2,
+                          LV_HOR_RES_MAX / 2 - 16);
+    M5Dial.Display.drawString(wifi_ssid, LV_HOR_RES_MAX / 2,
+                          LV_HOR_RES_MAX / 2 + 16);
+    M5Dial.Display.drawString(WiFi.localIP().toString(), LV_HOR_RES_MAX / 2,
+                          LV_HOR_RES_MAX / 2 + 48);
     delay(3000);
 
     lookupPypilot();
 
-    M5.Display.clear(BLACK);
-    M5.Display.setFont(&fonts::Orbitron_Light_24);
-    M5.Display.drawString("Connecting to ", LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2 - 16);
+    M5Dial.Display.clear(BLACK);
+    M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
+    M5Dial.Display.drawString("Connecting to ", LV_HOR_RES_MAX / 2,
+                          LV_HOR_RES_MAX / 2 - 16);
 
-    M5.Display.drawString("PyPilot", LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2 + 16);
-    M5.Display.drawString(pypilot_tcp_host.toString(), LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2 + 44);
+    M5Dial.Display.drawString("PyPilot", LV_HOR_RES_MAX / 2,
+                          LV_HOR_RES_MAX / 2 + 16);
+    M5Dial.Display.drawString(pypilot_tcp_host.toString(), LV_HOR_RES_MAX / 2,
+                          LV_HOR_RES_MAX / 2 + 44);
     delay(1000);
 
-    pypilot_begin(pypClient, pypilot_tcp_host, pypilot_tcp_port); // Connect to the PyPilot TCP server
-    M5.Display.setFont(&fonts::Orbitron_Light_32);
+    // pypilot_begin(pypClient, pypilot_tcp_host, pypilot_tcp_port); // Connect
+    // to the PyPilot TCP server
+    M5Dial.Display.setFont(&fonts::Orbitron_Light_32);
 
     return true;
   }
   return false;
 }
 
-void drawStandbyScreen()
-{
-  M5.Display.setFont(&fonts::Orbitron_Light_32);
-  M5.Display.setTextSize(0.5);
-  M5.Display.clear(BLACK);
-  M5.Display.setTextColor(color);
+void drawStandbyScreen() {
+  M5Dial.Display.setFont(&fonts::Orbitron_Light_32);
+  M5Dial.Display.setTextSize(0.5);
+  M5Dial.Display.clear(BLACK);
+  M5Dial.Display.setTextColor(color);
 
-  if (selectedOption == 0)
-  { // Compass
-    M5.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, LV_HOR_RES_MAX / 2, 180, 270, selectedColor);
-  }
-  else if (selectedOption == 1)
-  { // GPS
-    M5.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, LV_HOR_RES_MAX / 2, 270, 0, selectedColor);
-  }
-  else if (selectedOption == 2)
-  { // Wind
-    M5.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, LV_HOR_RES_MAX / 2, 0, 90, selectedColor);
-  }
-  else if (selectedOption == 3)
-  { // True Wind
-    M5.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, LV_HOR_RES_MAX / 2, 90, 180, selectedColor);
+  if (selectedOption == 0) { // Compass
+    M5Dial.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50,
+                       LV_HOR_RES_MAX / 2, 180, 270, selectedColor);
+  } else if (selectedOption == 1) { // GPS
+    M5Dial.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50,
+                       LV_HOR_RES_MAX / 2, 270, 0, selectedColor);
+  } else if (selectedOption == 2) { // Wind
+    M5Dial.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50,
+                       LV_HOR_RES_MAX / 2, 0, 90, selectedColor);
+  } else if (selectedOption == 3) { // True Wind
+    M5Dial.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50,
+                       LV_HOR_RES_MAX / 2, 90, 180, selectedColor);
   }
 
-  M5.Display.drawFastHLine(0, LV_VER_RES_MAX / 2, LV_HOR_RES_MAX, color);
-  M5.Display.drawFastVLine(LV_HOR_RES_MAX / 2, 0, LV_VER_RES_MAX, color);
+  M5Dial.Display.drawFastHLine(0, LV_VER_RES_MAX / 2, LV_HOR_RES_MAX, color);
+  M5Dial.Display.drawFastVLine(LV_HOR_RES_MAX / 2, 0, LV_VER_RES_MAX, color);
 
-  M5.Display.drawString("Compass", M5.Display.width() / 4, M5.Display.height() / 4);
-  M5.Display.drawString("GPS", M5.Display.width() / 4 * 3, M5.Display.height() / 4);
-  M5.Display.drawString("T Wind", M5.Display.width() / 4, M5.Display.height() / 4 * 3);
-  M5.Display.drawString("Wind", M5.Display.width() / 4 * 3, M5.Display.height() / 4 * 3);
+  M5Dial.Display.drawString("Compass", M5Dial.Display.width() / 4,
+                        M5Dial.Display.height() / 4);
+  M5Dial.Display.drawString("GPS", M5Dial.Display.width() / 4 * 3,
+                        M5Dial.Display.height() / 4);
+  M5Dial.Display.drawString("T Wind", M5Dial.Display.width() / 4,
+                        M5Dial.Display.height() / 4 * 3);
+  M5Dial.Display.drawString("Wind", M5Dial.Display.width() / 4 * 3,
+                        M5Dial.Display.height() / 4 * 3);
 
-  M5.Display.fillCircle(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, selectedOption == 4 ? selectedColor : BLACK);
-  M5.Display.drawCircle(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, color);
+  M5Dial.Display.fillCircle(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50,
+                        selectedOption == 4 ? selectedColor : BLACK);
+  M5Dial.Display.drawCircle(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, color);
 
-  M5.Display.drawString("Rudder", M5.Display.width() / 2, M5.Display.height() / 2);
+  M5Dial.Display.drawString("Rudder", M5Dial.Display.width() / 2,
+                        M5Dial.Display.height() / 2);
 }
 
-void drawNavigationScreen()
-{
-  M5.Display.setFont(&fonts::Orbitron_Light_32);
-  M5.Display.setTextSize(1);
-  M5.Display.clear(BLACK);
+void drawNavigationScreen() {
+  M5Dial.Display.setFont(&fonts::Orbitron_Light_32);
+  M5Dial.Display.setTextSize(1);
+  M5Dial.Display.clear(BLACK);
 
-  M5.Display.drawFloat(round(edit_heading), 0, M5.Display.width() / 2, M5.Display.height() / 4);
-  M5.Display.setTextSize(2);
-  M5.Display.drawFloat(round(shipDataModel.steering.autopilot.heading.deg), 0, M5.Display.width() / 2, M5.Display.height() / 2);
-  M5.Display.setTextSize(1);
-  M5.Display.setTextColor(selectingMode ? emphasisColor : color);
-  M5.Display.drawString(modes[edit_mode], M5.Display.width() / 2, M5.Display.height() / 4 * 3);
-  M5.Display.setTextColor(color);
+  M5Dial.Display.drawFloat(round(edit_heading), 0, M5Dial.Display.width() / 2,
+                       M5Dial.Display.height() / 4);
+  M5Dial.Display.setTextSize(2);
+  M5Dial.Display.drawFloat(round(shipDataModel.steering.autopilot.heading.deg), 0,
+                       M5Dial.Display.width() / 2, M5Dial.Display.height() / 2);
+  M5Dial.Display.setTextSize(1);
+  M5Dial.Display.setTextColor(selectingMode ? emphasisColor : color);
+  M5Dial.Display.drawString(modes[edit_mode], M5Dial.Display.width() / 2,
+                        M5Dial.Display.height() / 4 * 3);
+  M5Dial.Display.setTextColor(color);
 
-  M5.Display.fillTriangle(0, LV_VER_RES_MAX / 2, 30, LV_VER_RES_MAX / 2 - 17, 30, LV_VER_RES_MAX / 2 + 17,
-                              aboutToTackState == ABOUT_TO_TACK_PORT ? ORANGE : ((shipDataModel.steering.autopilot.tack.st != ap_tack_state_e::TACK_NONE && shipDataModel.steering.autopilot.tack.direction == ap_tack_direction_e::TACKING_TO_PORT) ? emphasisColor : color));
+  M5Dial.Display.fillTriangle(
+      0, LV_VER_RES_MAX / 2, 30, LV_VER_RES_MAX / 2 - 17, 30,
+      LV_VER_RES_MAX / 2 + 17,
+      aboutToTackState == ABOUT_TO_TACK_PORT
+          ? ORANGE
+          : ((shipDataModel.steering.autopilot.tack.st !=
+                  ap_tack_state_e::TACK_NONE &&
+              shipDataModel.steering.autopilot.tack.direction ==
+                  ap_tack_direction_e::TACKING_TO_PORT)
+                 ? emphasisColor
+                 : color));
 
-  M5.Display.fillTriangle(LV_HOR_RES_MAX - 30, LV_VER_RES_MAX / 2 - 17, LV_HOR_RES_MAX - 30, LV_VER_RES_MAX / 2 + 17, LV_HOR_RES_MAX, LV_VER_RES_MAX / 2,
-                              aboutToTackState == ABOUT_TO_TACK_STARBOARD ? ORANGE : ((shipDataModel.steering.autopilot.tack.st != ap_tack_state_e::TACK_NONE && shipDataModel.steering.autopilot.tack.direction == ap_tack_direction_e::TACKING_TO_STARBOARD) ? emphasisColor : color));
+  M5Dial.Display.fillTriangle(
+      LV_HOR_RES_MAX - 30, LV_VER_RES_MAX / 2 - 17, LV_HOR_RES_MAX - 30,
+      LV_VER_RES_MAX / 2 + 17, LV_HOR_RES_MAX, LV_VER_RES_MAX / 2,
+      aboutToTackState == ABOUT_TO_TACK_STARBOARD
+          ? ORANGE
+          : ((shipDataModel.steering.autopilot.tack.st !=
+                  ap_tack_state_e::TACK_NONE &&
+              shipDataModel.steering.autopilot.tack.direction ==
+                  ap_tack_direction_e::TACKING_TO_STARBOARD)
+                 ? emphasisColor
+                 : color));
 }
 
-void drawRudderScreen()
-{
+void drawRudderScreen() {
 
-  M5.Display.setTextSize(1);
-  M5.Display.clear(BLACK);
+  M5Dial.Display.setTextSize(1);
+  M5Dial.Display.clear(BLACK);
 
-  M5.Display.drawFloat(edit_position, 0, M5.Display.width() / 2, M5.Display.height() / 4);
-  M5.Display.setTextSize(2);
-  M5.Display.drawFloat(round(shipDataModel.steering.autopilot.heading.deg), 0, M5.Display.width() / 2, M5.Display.height() / 2);
-  M5.Display.setTextSize(1);
-  M5.Display.drawFloat(shipDataModel.steering.rudder_angle.deg, 0, M5.Display.width() / 2, M5.Display.height() / 4 * 3);
+  M5Dial.Display.drawFloat(edit_position, 0, M5Dial.Display.width() / 2,
+                       M5Dial.Display.height() / 4);
+  M5Dial.Display.setTextSize(2);
+  M5Dial.Display.drawFloat(round(shipDataModel.steering.autopilot.heading.deg), 0,
+                       M5Dial.Display.width() / 2, M5Dial.Display.height() / 2);
+  M5Dial.Display.setTextSize(1);
+  M5Dial.Display.drawFloat(shipDataModel.steering.rudder_angle.deg, 0,
+                       M5Dial.Display.width() / 2, M5Dial.Display.height() / 4 * 3);
   last_drawn_position = shipDataModel.steering.rudder_angle.deg;
 }
 
-void drawDetailScreen()
-{
+void drawDetailScreen() {
   char buffer[128];
 
-  M5.Display.setTextSize(1);
-  M5.Display.clear(BLACK);
+  M5Dial.Display.setTextSize(1);
+  M5Dial.Display.clear(BLACK);
 
-  sprintf(buffer, "V: %.1f", shipDataModel.steering.autopilot.ap_servo.voltage.volt);
-  M5.Display.drawString(buffer, M5.Display.width() / 2, M5.Display.height() / 4);
+  sprintf(buffer, "V: %.1f",
+          shipDataModel.steering.autopilot.ap_servo.voltage.volt);
+  M5Dial.Display.drawString(buffer, M5Dial.Display.width() / 2,
+                        M5Dial.Display.height() / 4);
 
-  sprintf(buffer, "Ah: %.1f", shipDataModel.steering.autopilot.ap_servo.amp_hr.amp_hr);
-  M5.Display.drawString(buffer, M5.Display.width() / 2, M5.Display.height() / 2);
+  sprintf(buffer, "Ah: %.1f",
+          shipDataModel.steering.autopilot.ap_servo.amp_hr.amp_hr);
+  M5Dial.Display.drawString(buffer, M5Dial.Display.width() / 2,
+                        M5Dial.Display.height() / 2);
 
-  sprintf(buffer, "T: %.1f", shipDataModel.steering.autopilot.ap_servo.controller_temp.deg_C);
-  M5.Display.drawString(buffer, M5.Display.width() / 2, M5.Display.height() / 4 * 3);
+  sprintf(buffer, "T: %.1f",
+          shipDataModel.steering.autopilot.ap_servo.controller_temp.deg_C);
+  M5Dial.Display.drawString(buffer, M5Dial.Display.width() / 2,
+                        M5Dial.Display.height() / 4 * 3);
 }
 
-void drawReconnectingScreen()
-{
-  M5.Display.clear(BLACK);
-  M5.Display.setFont(&fonts::Orbitron_Light_24);
-  M5.Display.setTextSize(1);
+void drawReconnectingScreen() {
+  M5Dial.Display.clear(BLACK);
+  M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
+  M5Dial.Display.setTextSize(1);
 
-  M5.Display.drawString("Reconnecting to:", M5.Display.width() / 2, M5.Display.height() / 2) - 32;
-  M5.Display.setTextSize(1);
-  M5.Display.drawString(pypilot_tcp_host.toString(), M5.Display.width() / 2, M5.Display.height() / 2 + 32);
-  M5.Display.setTextSize(1);
+  M5Dial.Display.drawString("Reconnecting to:", M5Dial.Display.width() / 2,
+                        M5Dial.Display.height() / 2) -
+      32;
+  M5Dial.Display.setTextSize(1);
+  M5Dial.Display.drawString(pypilot_tcp_host.toString(), M5Dial.Display.width() / 2,
+                        M5Dial.Display.height() / 2 + 32);
+  M5Dial.Display.setTextSize(1);
 
-  M5.Display.setFont(&fonts::Orbitron_Light_32);
+  M5Dial.Display.setFont(&fonts::Orbitron_Light_32);
 }
 
-void drawScreen()
-{
-  M5.Display.beginTransaction();
+void drawScreen() {
+  M5Dial.Display.beginTransaction();
 
-  if (!pypClient.c.connected())
-  {
+  if (!pypClient.c.connected()) {
     drawReconnectingScreen();
-  }
-  else if (shipDataModel.steering.autopilot.ap_state.st == ap_state_e::STANDBY)
-  {
-    if (rudderMode)
-    {
+  } else if (shipDataModel.steering.autopilot.ap_state.st ==
+             ap_state_e::STANDBY) {
+    if (rudderMode) {
       drawRudderScreen();
-    }
-    else if (detailMode)
-    {
+    } else if (detailMode) {
       drawDetailScreen();
-    }
-    else
-    {
+    } else {
       drawStandbyScreen();
     }
-  }
-  else
-  {
+  } else {
     drawNavigationScreen();
   }
 
-  M5.Display.endTransaction();
+  M5Dial.Display.endTransaction();
   redraw = false;
 }
 
-void doUpdateRudder(long count)
-{
+void doUpdateRudder(long count) {
   edit_position = shipDataModel.steering.rudder_angle.deg - (count * 1.0);
 
-  if (edit_position < -MAX_RUDDER)
-  {
+  if (edit_position < -MAX_RUDDER) {
     edit_position = -MAX_RUDDER;
   }
 
-  if (edit_position > MAX_RUDDER)
-  {
+  if (edit_position > MAX_RUDDER) {
     edit_position = MAX_RUDDER;
   }
 }
 
-void sendRudderCommand()
-{
+void sendRudderCommand() {
 
   float delta = edit_position - shipDataModel.steering.rudder_angle.deg;
 
   // Serial.print("Delta: "); Serial.println(String(delta, 2));
 
-  if (fabs(delta) < 0.5)
-  {
+  if (fabs(delta) < 0.5) {
     Serial.print("Servo position at ");
-    Serial.println(String(shipDataModel.steering.autopilot.ap_servo.position.deg, 2));
+    Serial.println(
+        String(shipDataModel.steering.autopilot.ap_servo.position.deg, 2));
     pypilot_send_rudder_command(pypClient.c, 0.0);
     updateRudder = false;
-  }
-  else
-  {
+  } else {
 
     float sign = 1.0;
-    if (delta > 0.0)
-    {
+    if (delta > 0.0) {
       sign = 1.0;
-    }
-    else
-    {
+    } else {
       sign = -1.0;
     }
     float command = fabs(delta) / 60.0;
@@ -523,15 +518,15 @@ void sendRudderCommand()
 
     /* Serial.print(String(command, 2));
     Serial.print(";");
-    Serial.println(String(shipDataModel.steering.autopilot.ap_servo.position.deg, 2));
+    Serial.println(String(shipDataModel.steering.autopilot.ap_servo.position.deg,
+    2));
     */
 
     pypilot_send_rudder_command(pypClient.c, command);
   }
 }
 
-void commitRudder(long count)
-{
+void commitRudder(long count) {
 
   // pypilot_send_rudder_position(pypClient.c, edit_position);
   // return;
@@ -539,46 +534,39 @@ void commitRudder(long count)
   sendRudderCommand(); // Start without command
 }
 
-bool doRudder()
-{
+bool doRudder() {
 
-  if (M5.BtnA.wasReleased())
-  {
+  if (M5Dial.BtnA.wasReleased()) {
     last_touched = millis();
     rudderMode = false;
     return true;
   }
 
-  auto t = M5.Touch.getDetail();
-  if (t.state == T_HOLD_BEGIN)
-  {
+  auto t = M5Dial.Touch.getDetail();
+  if (t.state == T_HOLD_BEGIN) {
     last_touched = millis();
-     M5.Speaker.tone(2000, 100, 0, false);
+    M5Dial.Speaker.tone(2000, 100, 0, false);
   }
-  if (t.state == T_HOLD_END)
-  {
+  if (t.state == T_HOLD_END) {
 
-    
-      last_touched = millis();
-      M5.Speaker.tone(1000, 100, 0, false);
-      edit_position = 0.0;
-      updateRudder = true;
-      sendRudderCommand();
-      redraw = true;
-    
+    last_touched = millis();
+    M5Dial.Speaker.tone(1000, 100, 0, false);
+    edit_position = 0.0;
+    updateRudder = true;
+    sendRudderCommand();
+    redraw = true;
   }
 
   redraw = redraw || menu_encoder_update(doUpdateRudder, commitRudder);
-  redraw = redraw || (fabs(last_drawn_position - shipDataModel.steering.rudder_angle.deg) >= 1.0);
+  redraw = redraw || (fabs(last_drawn_position -
+                           shipDataModel.steering.rudder_angle.deg) >= 1.0);
 
   return redraw;
 }
 
-bool doDetail()
-{
+bool doDetail() {
 
-  if (M5.BtnA.wasReleased())
-  {
+  if (M5Dial.BtnA.wasReleased()) {
     last_touched = millis();
     detailMode = false;
     return true;
@@ -586,61 +574,50 @@ bool doDetail()
   return false;
 }
 
-void updateSteering(long count)
-{
+void updateSteering(long count) {
 
   if (shipDataModel.steering.autopilot.ap_mode.mode == ap_mode_e::APP_WIND ||
-    shipDataModel.steering.autopilot.ap_mode.mode == ap_mode_e::APP_WIND_MAG ||
-    shipDataModel.steering.autopilot.ap_mode.mode == ap_mode_e::APP_WIND_TRUE ){
-        edit_heading = shipDataModel.steering.autopilot.command.deg - (count * 1.0);
-    }else{
-      edit_heading = shipDataModel.steering.autopilot.command.deg + (count * 1.0);
-    }
-  
+      shipDataModel.steering.autopilot.ap_mode.mode ==
+          ap_mode_e::APP_WIND_MAG ||
+      shipDataModel.steering.autopilot.ap_mode.mode ==
+          ap_mode_e::APP_WIND_TRUE) {
+    edit_heading = shipDataModel.steering.autopilot.command.deg - (count * 1.0);
+  } else {
+    edit_heading = shipDataModel.steering.autopilot.command.deg + (count * 1.0);
+  }
 
   if (shipDataModel.steering.autopilot.ap_mode.mode == ap_mode_e::HEADING_MAG ||
-      shipDataModel.steering.autopilot.ap_mode.mode == ap_mode_e::COG_TRUE)
-  {
-    while (edit_heading < 0)
-    {
+      shipDataModel.steering.autopilot.ap_mode.mode == ap_mode_e::COG_TRUE) {
+    while (edit_heading < 0) {
       edit_heading += 360.0;
     }
 
-    while (edit_heading >= 360.0)
-    {
+    while (edit_heading >= 360.0) {
       edit_heading -= 360.0;
     }
-  }
-  else
-  {
-    if (edit_heading < -180)
-    {
+  } else {
+    if (edit_heading < -180) {
       edit_heading = edit_heading + 360.0;
     }
 
-    if (edit_heading >= 180)
-    {
+    if (edit_heading >= 180) {
       edit_heading = edit_heading - 360.0;
     }
   }
 }
 
-void commitSteering(long count)
-{
+void commitSteering(long count) {
   shipDataModel.steering.autopilot.command.deg = edit_heading;
   pypilot_send_command(pypClient.c, edit_heading);
 }
 
-void updateMenu(long count)
-{
+void updateMenu(long count) {
   edit_mode = modeIndex(shipDataModel.steering.autopilot.ap_mode.mode) + count;
 
-  while (edit_mode < 0)
-  {
+  while (edit_mode < 0) {
     edit_mode = edit_mode + 4;
   }
-  while (edit_mode >= 4)
-  {
+  while (edit_mode >= 4) {
     edit_mode = edit_mode - 4;
   }
 
@@ -648,8 +625,7 @@ void updateMenu(long count)
   Serial.println(edit_mode);
 }
 
-void commitMenu(long count)
-{
+void commitMenu(long count) {
 
   pypilot_send_mode(pypClient.c, modeCommand(edit_mode));
 
@@ -663,125 +639,97 @@ void commitMenu(long count)
   Serial.println(selectedOption);
 }
 
-bool doNavigation()
-{
+bool doNavigation() {
   bool doRedraw = false;
-  if (!selectingMode)
-  {
-    if (edit_mode != modeIndex(shipDataModel.steering.autopilot.ap_mode.mode))
-    {
+  if (!selectingMode) {
+    if (edit_mode != modeIndex(shipDataModel.steering.autopilot.ap_mode.mode)) {
       edit_mode = modeIndex(shipDataModel.steering.autopilot.ap_mode.mode);
       doRedraw = true;
     }
   }
-  if (menu_encoder_last_movement == 0)
-  {
-    if (edit_heading != shipDataModel.steering.autopilot.command.deg)
-    {
+  if (menu_encoder_last_movement == 0) {
+    if (edit_heading != shipDataModel.steering.autopilot.command.deg) {
 
       edit_heading = shipDataModel.steering.autopilot.command.deg;
       doRedraw = true;
     }
   }
 
-  if (M5.BtnA.wasPressed())
-  {
-    M5.Speaker.tone(2000, 100, 0, false);
+  if (M5Dial.BtnA.wasPressed()) {
+    M5Dial.Speaker.tone(2000, 100, 0, false);
   }
-  if (M5.BtnA.wasReleased())
-  {
-    M5.Speaker.tone(1000, 100, 0, false);
-    // shipDataModel.steering.autopilot.ap_state.st = ap_state_e::STANDBY; // Send  data to pypilot
+  if (M5Dial.BtnA.wasReleased()) {
+    M5Dial.Speaker.tone(1000, 100, 0, false);
+    // shipDataModel.steering.autopilot.ap_state.st = ap_state_e::STANDBY; //
+    // Send  data to pypilot
     last_touched = millis();
     oldPosition = M5Dial.Encoder.read();
     pypilot_send_disengage(pypClient.c);
     return true;
   }
 
-  if (selectingMode)
-  {
+  if (selectingMode) {
     doRedraw = doRedraw || menu_encoder_update(updateMenu, commitMenu);
-  }
-  else
-  {
+  } else {
     doRedraw = doRedraw || menu_encoder_update(updateSteering, commitSteering);
   }
 
-  auto t = M5.Touch.getDetail();
-  if (t.state == T_TOUCH_BEGIN)
-  {
-    M5.Speaker.tone(2000, 100, 0, false);
+  auto t = M5Dial.Touch.getDetail();
+  if (t.state == T_TOUCH_BEGIN) {
+    M5Dial.Speaker.tone(2000, 100, 0, false);
   }
-  if (t.state == T_TOUCH_END)
-  {
-    M5.Speaker.tone(1000, 100, 0, false);
-    if (shipDataModel.steering.autopilot.tack.st != ap_tack_state_e::TACK_NONE)
-    {
+  if (t.state == T_TOUCH_END) {
+    M5Dial.Speaker.tone(1000, 100, 0, false);
+    if (shipDataModel.steering.autopilot.tack.st !=
+        ap_tack_state_e::TACK_NONE) {
       pypilot_send_cancel_tack(pypClient.c);
-    }
-    else if (abs(t.y - LV_VER_RES_MAX) < 60)
-    {
+    } else if (abs(t.y - LV_VER_RES_MAX) < 60) {
       selectingMode = !selectingMode;
       doRedraw = true;
-    }
-    else
-    {
+    } else {
       edit_heading = shipDataModel.steering.autopilot.heading.deg;
       commitSteering(0);
       doRedraw = true;
     }
   }
 
-  if (t.state == T_HOLD_BEGIN)
-  {
+  if (t.state == T_HOLD_BEGIN) {
 
-    if (t.x < 80 && abs(t.y - LV_VER_RES_MAX / 2) < 30)
-    {
+    if (t.x < 80 && abs(t.y - LV_VER_RES_MAX / 2) < 30) {
       aboutToTackState = ABOUT_TO_TACK_PORT;
       doRedraw = true;
-    }
-    else if (t.x > (LV_HOR_RES_MAX - 80) && abs(t.y - LV_VER_RES_MAX / 2) < 30)
-    {
+    } else if (t.x > (LV_HOR_RES_MAX - 80) &&
+               abs(t.y - LV_VER_RES_MAX / 2) < 30) {
       aboutToTackState = ABOUT_TO_TACK_STARBOARD;
       doRedraw = true;
     }
-  }
-  else if (t.state == T_HOLD_END)
-  {
-    M5.Speaker.tone(1000, 100, 0, false);
-    if (t.x < 80 && abs(t.y - LV_VER_RES_MAX / 2) < 30)
-    {
+  } else if (t.state == T_HOLD_END) {
+    M5Dial.Speaker.tone(1000, 100, 0, false);
+    if (t.x < 80 && abs(t.y - LV_VER_RES_MAX / 2) < 30) {
       pypilot_send_tack(pypClient.c, TACK_PORT);
       doRedraw = true;
-    }
-    else if (t.x > (LV_HOR_RES_MAX - 80) && abs(t.y - LV_VER_RES_MAX / 2) < 30)
-    {
+    } else if (t.x > (LV_HOR_RES_MAX - 80) &&
+               abs(t.y - LV_VER_RES_MAX / 2) < 30) {
       pypilot_send_tack(pypClient.c, TACK_STARBOARD);
       doRedraw = true;
     }
     aboutToTackState = ABOUT_TO_TACK_NONE;
   }
 
-  if (t.state != T_NONE)
-  {
+  if (t.state != T_NONE) {
     last_touched = millis();
   }
 
   return doRedraw;
 }
 
-bool doStandby()
-{
+bool doStandby() {
   bool doRedraw = false;
 
-  if (M5.BtnA.wasReleasedAfterHold())
-  {
-    if (color == GREEN)
-    {
+  if (M5Dial.BtnA.wasReleasedAfterHold()) {
+    if (color == GREEN) {
       setNightColor();
-    }
-    else
-    {
+    } else {
       setDayColor();
     }
     doRedraw = true;
@@ -789,19 +737,16 @@ bool doStandby()
   }
 
   long newPosition = M5Dial.Encoder.read();
-  if (newPosition != oldPosition)
-  {
-    M5.Speaker.tone(3000, 30, 0, false);
+  if (newPosition != oldPosition) {
+    M5Dial.Speaker.tone(3000, 30, 0, false);
     last_touched = millis();
     int delta = newPosition - oldPosition;
     selectedOption = selectedOption += delta;
 
-    while (selectedOption < 0)
-    {
+    while (selectedOption < 0) {
       selectedOption += 5;
     }
-    while (selectedOption > 4)
-    {
+    while (selectedOption > 4) {
       selectedOption -= 5;
     }
     Serial.print("New Option ");
@@ -809,83 +754,76 @@ bool doStandby()
     doRedraw = true;
   }
   // Touch
-  auto t = M5.Touch.getDetail();
+  auto t = M5Dial.Touch.getDetail();
   oldPosition = M5Dial.Encoder.read();
 
   bool enable_touch = true;
-/*
-  if (t.state == T_TOUCH_BEGIN && enable_touch)
-  {
-    M5.Speaker.tone(2000, 100, 0, false);
+  /*
+    if (t.state == T_TOUCH_BEGIN && enable_touch)
+    {
+      M5Dial.Speaker.tone(2000, 100, 0, false);
+    }
+    */
+  if (t.state == T_HOLD_BEGIN && enable_touch) {
+    M5Dial.Speaker.tone(3000, 100, 0, false);
   }
-  */
-  if (t.state == T_HOLD_BEGIN && enable_touch)
-  {
-    M5.Speaker.tone(3000, 100, 0, false);
-  }
-  if (t.state == T_HOLD_END && enable_touch)
-  {
-    M5.Speaker.tone(1000, 100, 0, false);
+  if (t.state == T_HOLD_END && enable_touch) {
+    M5Dial.Speaker.tone(1000, 100, 0, false);
     // Check if in the center.
 
-    if (abs(t.x - LV_HOR_RES_MAX / 2) < 20 && abs(t.y - LV_VER_RES_MAX / 2) < 20)
-    {
-      shipDataModel.steering.autopilot.ap_state.st = ap_state_e::STANDBY; // Send  data to pypilot
+    if (abs(t.x - LV_HOR_RES_MAX / 2) < 20 &&
+        abs(t.y - LV_VER_RES_MAX / 2) < 20) {
+      shipDataModel.steering.autopilot.ap_state.st =
+          ap_state_e::STANDBY; // Send  data to pypilot
       rudderMode = true;
       updateRudder = false;
       edit_position = shipDataModel.steering.autopilot.ap_servo.position.deg;
       selectedOption = 4;
       doRedraw = true;
-    }
-    else if (t.y < LV_VER_RES_MAX / 2)
-    {
-      if (t.x < LV_VER_RES_MAX / 2)
-      {
+    } else if (t.y < LV_VER_RES_MAX / 2) {
+      if (t.x < LV_VER_RES_MAX / 2) {
         Serial.println("Selected Compass");
         oldPosition = M5Dial.Encoder.read();
         pypilot_send_engage(pypClient.c);
         pypilot_send_mode(pypClient.c, AP_MODE_COMPASS);
         edit_heading = shipDataModel.steering.autopilot.heading.deg;
         commitSteering(0);
-        shipDataModel.steering.autopilot.ap_state.st = ap_state_e::ENGAGED; // Send  data to pypilot
+        shipDataModel.steering.autopilot.ap_state.st =
+            ap_state_e::ENGAGED; // Send  data to pypilot
         shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::HEADING_MAG;
         selectedOption = 0;
-      }
-      else
-      {
+      } else {
         Serial.println("Selected GPS");
         oldPosition = M5Dial.Encoder.read();
         pypilot_send_engage(pypClient.c);
         pypilot_send_mode(pypClient.c, AP_MODE_GPS);
         edit_heading = shipDataModel.steering.autopilot.heading.deg;
         commitSteering(0);
-        shipDataModel.steering.autopilot.ap_state.st = ap_state_e::ENGAGED; // Send  data to pypilot
+        shipDataModel.steering.autopilot.ap_state.st =
+            ap_state_e::ENGAGED; // Send  data to pypilot
         shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::COG_TRUE;
         selectedOption = 1;
       }
-    }
-    else
-    {
-      if (t.x < LV_HOR_RES_MAX / 2)
-      {
+    } else {
+      if (t.x < LV_HOR_RES_MAX / 2) {
         Serial.println("Selected True Wind");
         pypilot_send_engage(pypClient.c);
         pypilot_send_mode(pypClient.c, AP_MODE_WIND_TRUE);
-       // edit_heading = shipDataModel.steering.autopilot.heading.deg;
-       // commitSteering(0);
-        shipDataModel.steering.autopilot.ap_state.st = ap_state_e::ENGAGED; // Send  data to pypilot
+        // edit_heading = shipDataModel.steering.autopilot.heading.deg;
+        // commitSteering(0);
+        shipDataModel.steering.autopilot.ap_state.st =
+            ap_state_e::ENGAGED; // Send  data to pypilot
         shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::TRUE_WIND;
         selectedOption = 3;
-      }
-      else
-      {
+      } else {
         Serial.println("Selected Wind");
         oldPosition = M5Dial.Encoder.read();
         pypilot_send_engage(pypClient.c);
         pypilot_send_mode(pypClient.c, AP_MODE_WIND);
-       //edit_heading = shipDataModel.steering.autopilot.heading.deg;
-       // commitSteering(0);
-        shipDataModel.steering.autopilot.ap_state.st = ap_state_e::ENGAGED; // Send  data to pypilot
+        // edit_heading = shipDataModel.steering.autopilot.heading.deg;
+        //  commitSteering(0);
+        shipDataModel.steering.autopilot.ap_state.st =
+            ap_state_e::ENGAGED; // Send  data to pypilot
         shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::APP_WIND;
         selectedOption = 2;
       }
@@ -901,18 +839,16 @@ bool doStandby()
   }
   */
 
-  if (M5.BtnA.wasPressed())
-  {
-    M5.Speaker.tone(2000, 100, 0, false);
+  if (M5Dial.BtnA.wasPressed()) {
+    M5Dial.Speaker.tone(2000, 100, 0, false);
   }
-  if (M5.BtnA.wasReleased())
-  {
-    M5.Speaker.tone(1000, 100, 0, false);
-    // shipDataModel.steering.autopilot.ap_state.st = ap_state_e::STANDBY; // Send  data to pypilot
+  if (M5Dial.BtnA.wasReleased()) {
+    M5Dial.Speaker.tone(1000, 100, 0, false);
+    // shipDataModel.steering.autopilot.ap_state.st = ap_state_e::STANDBY; //
+    // Send  data to pypilot
     last_touched = millis();
     oldPosition = M5Dial.Encoder.read();
-    switch (selectedOption)
-    {
+    switch (selectedOption) {
 
     case 0: // Compass
       pypilot_send_mode(pypClient.c, AP_MODE_COMPASS);
@@ -920,8 +856,9 @@ bool doStandby()
       pypilot_send_engage(pypClient.c);
       commitSteering(0);
       break;
-      // shipDataModel.steering.autopilot.ap_state.st = ap_state_e::ENGAGED; // Send  data to pypilot
-      // shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::HEADING_MAG;
+      // shipDataModel.steering.autopilot.ap_state.st = ap_state_e::ENGAGED; //
+      // Send  data to pypilot shipDataModel.steering.autopilot.ap_mode.mode =
+      // ap_mode_e::HEADING_MAG;
 
     case 1: // GPS
       pypilot_send_mode(pypClient.c, AP_MODE_GPS);
@@ -933,15 +870,15 @@ bool doStandby()
     case 2: // Wind
       pypilot_send_engage(pypClient.c);
       pypilot_send_mode(pypClient.c, AP_MODE_WIND);
-      //edit_heading = shipDataModel.steering.autopilot.heading.deg;
-      //commitSteering(0);
+      // edit_heading = shipDataModel.steering.autopilot.heading.deg;
+      // commitSteering(0);
       break;
 
     case 3: // True Wind
       pypilot_send_engage(pypClient.c);
       pypilot_send_mode(pypClient.c, AP_MODE_WIND_TRUE);
-      //edit_heading = shipDataModel.steering.autopilot.heading.deg;
-      //commitSteering(0);
+      // edit_heading = shipDataModel.steering.autopilot.heading.deg;
+      // commitSteering(0);
       break;
 
     case 4: // Rudder
@@ -956,8 +893,7 @@ bool doStandby()
     doRedraw = true;
   }
 
-  if (t.state != T_NONE)
-  {
+  if (t.state != T_NONE) {
     last_touched = millis();
   }
   return doRedraw;
@@ -984,76 +920,56 @@ bool doStandby()
 
 */
 
-bool loopTask()
-{
+bool loopTask() {
 
-  if (displaySaver == DISPLAY_SLEEPING)
-  {
-    auto t = M5.Touch.getDetail();
-    if (M5.BtnA.isPressed() || t.state == T_TOUCH_BEGIN)
-    {
+  if (displaySaver == DISPLAY_SLEEPING) {
+    auto t = M5Dial.Touch.getDetail();
+    if (M5Dial.BtnA.isPressed() || t.state == T_TOUCH_BEGIN) {
       displaySaver = DISPLAY_WAKING;
       return false;
-    }
-    else
-    {
+    } else {
       last_touched = 0;
       return false;
     }
-  }
-  else if (displaySaver == DISPLAY_WAKING)
-  {
-    auto t = M5.Touch.getDetail();
-    if (!M5.BtnA.isPressed() && t.state == T_NONE)
-    {
+  } else if (displaySaver == DISPLAY_WAKING) {
+    auto t = M5Dial.Touch.getDetail();
+    if (!M5Dial.BtnA.isPressed() && t.state == T_NONE) {
       last_touched = millis();
       return true;
-    }
-    else
-    {
+    } else {
       last_touched = 0;
       return false;
     }
-  }
-  else
-  {
-    if (shipDataModel.steering.autopilot.ap_state.st == ap_state_e::STANDBY)
-    {
-      if (rudderMode)
-      {
+  } else {
+    if (shipDataModel.steering.autopilot.ap_state.st == ap_state_e::STANDBY) {
+      if (rudderMode) {
         return doRudder();
-      }
-      else if (detailMode)
-      {
+      } else if (detailMode) {
         return doDetail();
-      }
-      else
-      {
+      } else {
         return doStandby();
       }
-    }
-    else
-    {
+    } else {
       return doNavigation();
     }
   }
 }
 
-void splash()
-{
-  M5.Display.setTextColor(color);
-  M5.Display.setTextDatum(middle_center);
-  M5.Display.setFont(&fonts::Orbitron_Light_24);
-  M5.Display.setTextSize(1);
-  M5.Display.drawString("AUTOPILOT", LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2 - 16);
-  M5.Display.drawString("Paco Gorina", LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2 + 16);
-  M5.Display.drawString(version, LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2 + 48);
-  M5.Display.setFont(&fonts::Orbitron_Light_32);
+void splash() {
+  M5Dial.Display.setTextColor(color);
+  M5Dial.Display.setTextDatum(middle_center);
+  M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
+  M5Dial.Display.setTextSize(1);
+  M5Dial.Display.drawString("AUTOPILOT", LV_HOR_RES_MAX / 2,
+                        LV_VER_RES_MAX / 2 - 16);
+  M5Dial.Display.drawString("Paco Gorina", LV_HOR_RES_MAX / 2,
+                        LV_VER_RES_MAX / 2 + 16);
+  M5Dial.Display.drawString(version, LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2 + 48);
+  M5Dial.Display.setFont(&fonts::Orbitron_Light_32);
   delay(5000);
 }
 
-void writePreferences()
-{
+void writePreferences() {
   preferences.begin("M5_pypilot", false);
   preferences.clear();
   /* preferences.remove("SSID");
@@ -1072,45 +988,30 @@ void writePreferences()
   Serial.println(pypilot_tcp_host.toString());
 }
 
-void lookupPypilot()
-{
-  M5.Display.clear(BLACK);
-  M5.Display.setFont(&fonts::Orbitron_Light_24);
-  M5.Display.drawString("Searching", LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2);
+void lookupPypilot() {
+  if (pypilot_tcp_host.toString() == "0.0.0.0" || pypilot_tcp_port <= 0) {
+    Serial.printf("Looking up into mDNS \n");
+    M5Dial.Display.clear(BLACK);
+    M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
+    M5Dial.Display.drawString("Searching", LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2);
 
-  if (pypilot_tcp_host.toString() == "0.0.0.0" || pypilot_tcp_port <= 0)
-  {
-    Serial.println("Cercant pypilot");
     mdns_begin();
-    int n = mdns_query_svc("pypilot", "tcp");
-    if (n > 0)
-    {
+    if (mdns_query_svc("pypilot", "tcp") > 0) {
       pypilot_tcp_host = MDNS.address(0);
       pypilot_tcp_port = MDNS.port(0);
-      Serial.print("Trobat Pyilot at ");
-      Serial.print(pypilot_tcp_host.toString());
-      Serial.print(" port ");
-      Serial.println(pypilot_tcp_port);
-      writePreferences();
-    }
-    else
-    {
+      Serial.printf("Found PyPilot at %s:%d \n", pypilot_tcp_host.toString(),
+                   pypilot_tcp_port);
+    } else {
       pypilot_tcp_host = IPAddress(192, 168, 1, 148);
       pypilot_tcp_port = 23322;
-      Serial.print("Trobat Pyilot at ");
-      Serial.print(pypilot_tcp_host.toString());
-      Serial.print(" port ");
-      Serial.println(pypilot_tcp_port);
-      writePreferences();
-
-      Serial.println("No he trobat pypilot");
+      Serial.printf("Not found PyPilot, using default value \n");
     }
+    writePreferences();
     mdns_end();
   }
 }
 
-void readPreferences()
-{
+void readPreferences() {
 
   preferences.begin("M5_pypilot", true);
   wifi_ssid = preferences.getString("SSID", wifi_ssid);
@@ -1122,77 +1023,79 @@ void readPreferences()
   Serial.print(" Read from Preferences ");
   Serial.println(pypilot_tcp_host.toString());
 
-  if (M5.BtnA.isPressed())
-  {
+  if (M5Dial.BtnA.isPressed()) {
     Serial.println("Resetting PyPilot Host");
 
     pypilot_tcp_port = 0;
-    M5.Display.clear(BLACK);
-    M5.Display.setFont(&fonts::Orbitron_Light_24);
-    M5.Display.drawString("Cleared Host", LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2);
+    M5Dial.Display.clear(BLACK);
+    M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
+    M5Dial.Display.drawString("Cleared Host", LV_HOR_RES_MAX / 2,
+                          LV_HOR_RES_MAX / 2);
     delay(5000);
-  }
-  else
-  {
+  } else {
     Serial.println(pypilot_tcp_host.toString());
   }
 }
 
-void setup()
-{
+void setup() {
 
-  auto cfg = M5.config();
-  M5Dial.begin(cfg, true, false);
+  M5Dial.begin(true, false);
   Serial.begin(115200);
+
+  // Setup General WiFI
+  WiFi.setAutoReconnect(true);
+  WiFi.mode(WIFI_STA);
 
   splash();
   M5Dial.update();
   readPreferences();
 
-  M5.Speaker.setVolume(128);
+  M5Dial.Speaker.setVolume(128);
   last_touched = millis();
 
   setup_ble();
+
+  xTaskCreatePinnedToCore(
+      netPylotTask, "netPylot",
+      4096, // watch this if you get stack overflows; String + TCP eats stack
+      nullptr, 5, nullptr,
+      1 // core 1, leave core 0 for UI
+  );
 }
 // Encoder dona 64 / volta
 
 #define GO_SLEEP_TIMEOUT 600000ul // 50 '
 
-void loop()
-{
+void loop() {
 
-  M5.update();
-  app.tick();
+  M5Dial.update();
 
-  if (!checkConnection())
-  {
-    startWiFi();
-  }
+  /*  if (!checkConnection())
+    {
+      startWiFi();
+    }
+      */
 
   redraw = redraw || loopTask();
 
-  if (last_touched > 0 && (millis() - last_touched > GO_SLEEP_TIMEOUT))
-  {
+  if (last_touched > 0 && (millis() - last_touched > GO_SLEEP_TIMEOUT)) {
     // disconnect_clients();
     // save_page(page);
     // deep_sleep_with_touch_wakeup();
     Serial.println("Going to sleep");
     last_touched = 0;
     displaySaver = DISPLAY_SLEEPING;
-    M5.Display.sleep(); // powerSaveOn();
-    M5.Display.setBrightness(0);
-  }
-  else if (last_touched != 0 && displaySaver == DISPLAY_WAKING)
-  {
+    M5Dial.Display.sleep(); // powerSaveOn();
+    M5Dial.Display.setBrightness(0);
+  } else if (last_touched != 0 && displaySaver == DISPLAY_WAKING) {
     Serial.println("Waking Up");
     displaySaver = DISPLAY_ACTIVE;
-    M5.Display.wakeup(); // powerSaveOff();
-    M5.Display.setBrightness(255);
+    M5Dial.Display.wakeup(); // powerSaveOff();
+    M5Dial.Display.setBrightness(255);
     redraw = true;
   }
 
-  if (redraw)
-  {
+  if (redraw) {
     drawScreen();
   }
 }

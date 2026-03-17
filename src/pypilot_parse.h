@@ -24,9 +24,9 @@ int  modeToInt(ap_mode_e mode){
   return 0;
 }
 
-  bool pypilot_parse(WiFiClient& client) {
+  bool pypilot_parse(String dataFeed) {
     bool found = false;
-    String dataFeed = client.readStringUntil('\n');
+    //String dataFeed = client.readStringUntil('\n');
     // ap.heading=164.798
     // ap.heading_command=220.0000
     // ap.enabled=false
