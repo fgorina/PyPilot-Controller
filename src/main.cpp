@@ -8,18 +8,12 @@
 
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
-#include <HTTPClient.h>
 #include <WiFi.h>
 // #include <ReactESP.h> // https://github.com/mairas/ReactESP.
 
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
-#include <BLEClient.h>
-#include <BLEScan.h>
-#include <BLEAdvertisedDevice.h>
-#include <ArduinoWebsockets.h>
-using namespace websockets;
 
 // Version
 
@@ -67,18 +61,6 @@ Preferences preferences;
 void writePreferences();
 void readPreferences();
 
-// SignalK / Calypso globals
-WebsocketsClient skClient;
-char sk_server[40]  = "";
-int  sk_port        = 0;
-char sk_path[]      = "/signalk/v1/stream?subscribe=none";
-char sk_token[256]  = "";
-char sk_big_buffer[1024] = "";
-String sk_me        = "vessels.self";
-bool sk_mdns_done   = false;
-int  sk_socket_state = -4;
-void writeSkPreferences();
-void readSkPreferences();
 void lookupPypilot();
 
 void setStateCharacteristicRudder(float rudder_angle);
@@ -126,8 +108,6 @@ static float last_drawn_position = 0.0; // Lasr Servo position drawn in screen
 static int selectedOption = 0;
 
 #include "ble_server.h"
-#include "ble_calypso.h"
-#include "net_signalk.h"
 
 long oldPosition = -999;
 int prev_x = -1;
@@ -1008,38 +988,6 @@ void writePreferences() {
   Serial.println(pypilot_tcp_host.toString());
 }
 
-void writeSkPreferences() {
-  preferences.begin("windmeter", false);
-  preferences.putString("PPHOST", sk_server);
-  preferences.putInt("PPPORT", sk_port);
-  preferences.putString("TOKEN", sk_token);
-  preferences.end();
-}
-
-void readSkPreferences() {
-  preferences.begin("windmeter", true);
-  preferences.getString("PPHOST", sk_server, sizeof(sk_server));
-  sk_port = preferences.getInt("PPPORT", sk_port);
-  preferences.getString("TOKEN", sk_token, sizeof(sk_token));
-  preferences.end();
-
-  if (M5Dial.BtnA.isPressed()) {
-    Serial.println("Resetting SignalK server and token");
-    sk_server[0] = '\0';
-    sk_port      = 0;
-    sk_token[0]  = '\0';
-    sk_mdns_done = false;
-    M5Dial.Display.clear(BLACK);
-    M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
-    M5Dial.Display.drawString("Cleared SignalK", LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2);
-    delay(2000);
-  } else if (strlen(sk_server) != 0 && sk_port != 0) {
-    sk_mdns_done = true; // skip mDNS if we already know the server
-  }
-
-  Serial.printf("SK prefs: server=%s port=%d token=%s\n",
-                sk_server, sk_port, strlen(sk_token) > 0 ? "(set)" : "(empty)");
-}
 
 void lookupPypilot() {
   if (pypilot_tcp_host.toString() == "0.0.0.0" || pypilot_tcp_port <= 0) {
@@ -1107,20 +1055,12 @@ void setup() {
   last_touched = millis();
 
   setup_ble();
-  readSkPreferences();
 
   xTaskCreatePinnedToCore(
       netPylotTask, "netPylot",
       4096, // watch this if you get stack overflows; String + TCP eats stack
       nullptr, 5, nullptr,
       1 // core 1, leave core 0 for UI
-  );
-
-  xTaskCreatePinnedToCore(
-      calypsoTask, "calypso",
-      8192, // WebSocket + HTTP + BLE client + JSON
-      nullptr, 4, nullptr,
-      1 // core 1 alongside netPylotTask
   );
 }
 // Encoder dona 64 / volta
