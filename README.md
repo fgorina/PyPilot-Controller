@@ -1,12 +1,13 @@
 # Pypilot controller
 
-This is a M5Dial controller for PyPilot.
+This is a M5Though controller for PyPilot.
 
-It makes a TCP connection to the PyPilot at port 23322 and opens a BLE service to configure :
+It makes a TCP connection to the PyPilot at port 23322 and opens a http server service to configure :
   - Network
   - Password
 
-There are 2 more characteristics 
+There are 2  characteristics in a BLE Server so we will be able to control the device from an AppleWatch or other BLE device.
+
   - Command : Writable, you may send commands
   - State : Readable, Notify sends state
 
@@ -21,32 +22,32 @@ pypilot data as :
   Allowing to write BLE controllers that don't need a TCP connection to PyPilot
 
 ## Use and configuration
-Service for configuration and use is
+The old characteristics for configuration must be removed and goes to the http server. The service remains for BLE Control
 
   Service f85015df-6af5-4ee3-a8cb-a8f7250d4466
 
+/*
 First we must give the controller the ssid and password of the network writing :
 
   - Characteristic bea80929-aa42-4641-a0c2-8f08b70e0aaa ssid
   - Characteristic 22643f77-dcfd-4e01-9b9f-bb63692a215f password
 
-  It should lookup for pypilot with mDNS. If changint ip push the encoder button when powering up and will clear old host and lookup for a new one.
+  */
 
-When connects shows a screen with the 4 modes (Compass, gps, wind, true wind) and a center rudder button. They may be selected just by clicking or selecting with the encoder an clicking the encoder button.
+  It should lookup for pypilot with mDNS. If changing ip touch the screen when powering up and will clear old host and lookup for a new one.
 
-In rudder you manage the rudder by turning the encoder to the desired rudder angle. Tap in the center will reset rudder to 0.
+When connects shows a screen with the 4 modes (Compass, gps, wind, true wind) and a center rudder button (MenuScreen). They may be selected just by tapping on them.
 
-In other modes it shows the Heading in the center, an editable desired heading at top, the mode and two arrows for the tack.
+In rudder you manage the rudder directly and have a button for centering it.
 
-Just move the encoder till top field show desired angle. When you stop tmoving the encoder, the order will be sent to pypilot.
+In other modes it shows the Heading in the center, an editable desired heading at top, and the buttons for +/- 1º, 10º.
 
-If tapping the mode, it turns red and encoder may be used to change it tapping when the desired mode is shown.
+A LongPress in the +/- 10º "Arms the tacking". A tap in the same button starts it. In other places disarms the tapping. When armed the button changes to orange and show a turning arrow.
+A tap while tacking stops the tack. When tacking end button is restores to default state.
+
 
 Of course only acceptable modes will be accepted by pypilot depending it's hardware and conections.
 
-Long pressing an arrow turns it red and starts tacking in the direction of the arrow. A tap everywhere cancels the tacking.
-
-A click in the encoder button goes back to the main screen.
 
 ## BLE Gateway
 
@@ -59,7 +60,7 @@ Usually an application subscribes to State and sends commands to command.
 
 ### State
 
-Messages received from State are composed by a first letter (type) and the rest are parameters.
+Messages received from State are composed by a first letter (type) and the rest are parameters. They are sent by us
 
 Types of message are
 

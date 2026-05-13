@@ -1,1102 +1,350 @@
-#define LV_HOR_RES_MAX 240
-#define LV_VER_RES_MAX 240
-
 #include <Arduino.h>
-
-#include <M5Dial.h>
-#include <Preferences.h>
-
-#include <ArduinoJson.h>
 #include <ESPmDNS.h>
+#include <M5Unified.h>
+#include <Preferences.h>
 #include <WiFi.h>
-// #include <ReactESP.h> // https://github.com/mairas/ReactESP.
+#include <vector>
 
-#include <BLEDevice.h>
-#include <BLEServer.h>
-#include <BLEUtils.h>
-
-// Version
-
-static const char *version = "v 0.0.5";
-
-// Define states
-
-#define T_NONE 0
-
-#define T_TOUCH 1
-#define T_TOUCH_END 2
-#define T_TOUCH_BEGIN 3
-
-#define T_HOLD 5
-#define T_HOLD_END 6
-#define T_HOLD_BEGIN 7
-
-#define T_FLICK 9
-#define T_FLICK_END 10
-#define T_FLICK_BEGIN 11
-
-#define T_DRAG 13
-#define T_DRAG_END 14
-#define T_DRAG_BEGIN 15
-
-static constexpr const char *state_name[16] = {
-    "none", "touch", "touch_end", "touch_begin",
-    "___",  "hold",  "hold_end",  "hold_begin",
-    "___",  "flick", "flick_end", "flick_begin",
-    "___",  "drag",  "drag_end",  "drag_begin"};
-
-static bool redraw = true;
-
-static String wifi_ssid = "elrond"; // Store the name of the wireless network.
-static String wifi_password =
-    "ailataN1991"; // Store the password of the wireless network.
-static IPAddress pypilot_tcp_host = IPAddress(192, 168, 1, 3);
-static int pypilot_tcp_port = 23322;
-
-static int color = GREEN;
-static int selectedColor = DARKGREEN;
-static int emphasisColor = RED;
-
-Preferences preferences;
-void writePreferences();
-void readPreferences();
-
-void lookupPypilot();
-
-void setStateCharacteristicRudder(float rudder_angle);
-void setStateCharacteristicHeading(float heading);
-void setStateCharacteristicCommand(float command);
-void setStateCharacteristicEnabled(int state);
-void setStateCharacteristicTackState(int tackState);
-void setStateCharacteristicTackDirection(int tackDirection);
-void setStateCharacteristicMode(int mode);
-
-#include "net_mdns.h"
-
-typedef struct _NetClient {
-  WiFiClient c = WiFiClient();
-  unsigned long lastActivity = 0U;
-} NetClient;
-
-NetClient pypClient = NetClient();
-
-#include "data_model.h"
-
-static ship_data_t shipDataModel;
-
-#include "keepalive.h"
-
-boolean startWiFi();
-
-#define MAX_RUDDER 30
-static bool rudderMode = false;
-static bool updateRudder = false;
-void sendRudderCommand();
-
-static bool detailMode = false; // Detail Mode is for special info for Autopilot
-
-#include "pypilot_parse.h"
-#include "net_pypilot.h"
-
-
-static constexpr const char *modes[4] = {"compass", "gps", "wind", "true wind"};
-static int edit_mode = 0;
-static float edit_heading = 0.0;
-static float edit_position = 0.0;       // Servo Position
-static float last_drawn_position = 0.0; // Lasr Servo position drawn in screen
-
-static int selectedOption = 0;
-
+#include "AppConfig.h"
+#include "ModeScreen.h"
+#include "PilotScreen.h"
+#include "RudderScreen.h"
+#include "Screen.h"
+#include "State.h"
 #include "ble_server.h"
+#include "net_pypilot.h"
+#include "net_webserver.h"
 
-long oldPosition = -999;
-int prev_x = -1;
-int prev_y = -1;
+// --- Physical button GPIO pins -----------------------------------------------
+// Both wired with external pull-ups (INPUT_PULLUP); pressed = LOW.
 
-static unsigned long last_touched;
-static m5::touch_state_t prev_state;
+static constexpr int PIN_STOP = 2;   // G2  — emergency stop
+static constexpr int PIN_START = 27; // G27 — engage in Compass mode
 
-#define DISPLAY_ACTIVE 0
-#define DISPLAY_SLEEPING 1
-#define DISPLAY_WAKING 2
+// --- Globals -----------------------------------------------------------------
 
-static int displaySaver = DISPLAY_ACTIVE;
+AppConfig config;
+State state;
+String myIp = "Connecting...";
+QueueHandle_t gCmdQueue; // declared extern in net_pypilot.h
 
-#define ABOUT_TO_TACK_PORT -1
-#define ABOUT_TO_TACK_STARBOARD 1
-#define ABOUT_TO_TACK_NONE 0
+static Preferences prefs;
+static NetWebServer *webServer = nullptr;
+static BleServer *bleServer = nullptr;
 
-static int aboutToTackState = ABOUT_TO_TACK_NONE;
-static bool selectingMode = false;
+static std::vector<Screen *> screens;
+static Screen *currentScreen = nullptr;
 
-#include "menu_encoder.h"
+static unsigned long lastTouched = 0;
+static unsigned long lastBleNotify = 0;
+static bool stopBtnWasLow = false;  // edge detection for STOP
+static bool startBtnWasLow = false; // edge detection for START
 
-// Funcions per connectar-se per BLE
-void setStateCharacteristicRudder(float rudder_angle) {
-  sprintf(buffer, "R%.0f", rudder_angle);
+static constexpr unsigned long SLEEP_TIMEOUT_MS = 600000ul; // 10 min
+static constexpr unsigned long BLE_NOTIFY_MS = 500ul;       // BLE refresh rate
 
-  stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
-  stateCharacteristic->notify();
-}
-void setStateCharacteristicHeading(float heading) {
-  sprintf(buffer, "H%.0f", heading);
+// --- Forward declarations ----------------------------------------------------
+void writePreferences();
+void switchTo(int idx);
 
-  stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
-  stateCharacteristic->notify();
-}
-
-void setStateCharacteristicCommand(float command) {
-  sprintf(buffer, "C%.0f", command);
-
-  stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
-  stateCharacteristic->notify();
-}
-
-void setStateCharacteristicEnabled(int state) {
-
-  if (state == 1) {
-    sprintf(buffer, "E");
-  } else {
-    sprintf(buffer, "D");
-  }
-  stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
-  stateCharacteristic->notify();
-}
-
-void setStateCharacteristicTackState(int tackState) {
-  sprintf(buffer, "T%d", tackState);
-
-  stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
-  stateCharacteristic->notify();
-}
-void setStateCharacteristicTackDirection(int tackDirection) {
-  sprintf(buffer, "U%d", tackDirection);
-
-  stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
-  stateCharacteristic->notify();
-}
-
-void setStateCharacteristicMode(int mode) {
-
-  sprintf(buffer, "M%i", mode);
-
-  stateCharacteristic->setValue((uint8_t *)buffer, strlen(buffer));
-  stateCharacteristic->notify();
-  Serial.print("Sending ");
-  Serial.println(buffer);
-}
-// Fi BLE
-
-int modeIndex(ap_mode_e mode) {
-  switch (mode) {
-  case ap_mode_e::HEADING_MAG:
-    return 0;
-    break;
-
-  case ap_mode_e::COG_TRUE:
-    return 1;
-    break;
-  case ap_mode_e::APP_WIND:
-    return 2;
-    break;
-
-  case ap_mode_e::TRUE_WIND:
-    return 3;
-    break;
-
-  default:
-    return -1;
-  }
-}
-
-const char *modeCommand(int idx) {
-  switch (idx) {
-  case 0:
-    return AP_MODE_COMPASS;
-    break;
-
-  case 1:
-    return AP_MODE_GPS;
-    break;
-  case 2:
-    return AP_MODE_WIND;
-    break;
-
-  case 3:
-    return AP_MODE_WIND_TRUE;
-    break;
-
-  default:
-    return AP_MODE_COMPASS;
-    break;
-  }
-}
-const char *modeString(ap_mode_e mode) {
-  int idx = modeIndex(mode);
-
-  if (idx < 0 || idx > 3) {
-    return "error";
-  } else {
-    return modes[idx];
-  }
-}
-// COLORS
-
-void setDayColor() {
-  color = GREEN;
-  selectedColor = DARKGREEN;
-  emphasisColor = RED;
-}
-
-void setNightColor() {
-  color = RED;
-  selectedColor = lgfx::v1::color565(128, 0, 0);
-  emphasisColor = GREEN;
-}
-// WiFI
-boolean checkConnection() { // Check wifi connection.
-  int count = 0;            // count.
-  while (count < 30) {      // If you fail to connect to wifi within 30*350ms
-                            // (10.5s), return false; otherwise return true.
-    if (WiFi.status() == WL_CONNECTED) {
-      return true;
-    }
-    delay(350);
-    count++;
-  }
-  return false;
-}
-
-boolean startWiFi() { // Check whether there is wifi configuration information
-                      // storage, if there is return 1, if no return 0.
-
-  M5Dial.Display.clear(BLACK);
-  M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
-  M5Dial.Display.drawString("Connecting to ", LV_HOR_RES_MAX / 2,
-                        LV_HOR_RES_MAX / 2 - 16);
-  M5Dial.Display.setFont(&fonts::Orbitron_Light_32);
-  M5Dial.Display.drawString(wifi_ssid, LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2 + 16);
-
-  // WiFi.setAutoConnect(true);
-  WiFi.setAutoReconnect(true);
-  WiFi.mode(WIFI_STA);
-  Serial.print(wifi_ssid);
-  Serial.print(" ");
-  Serial.println(wifi_password);
-  WiFi.begin(wifi_ssid.c_str(), wifi_password.c_str());
-  if (checkConnection()) {
-    Serial.print("Connected to ");
-    Serial.print(wifi_ssid);
-    Serial.print(" IP ");
-    Serial.println(WiFi.localIP());
-
-    M5Dial.Display.clear(BLACK);
-
-    M5Dial.Display.drawString("Connected to to ", LV_HOR_RES_MAX / 2,
-                          LV_HOR_RES_MAX / 2 - 16);
-    M5Dial.Display.drawString(wifi_ssid, LV_HOR_RES_MAX / 2,
-                          LV_HOR_RES_MAX / 2 + 16);
-    M5Dial.Display.drawString(WiFi.localIP().toString(), LV_HOR_RES_MAX / 2,
-                          LV_HOR_RES_MAX / 2 + 48);
-    delay(3000);
-
-    lookupPypilot();
-
-    M5Dial.Display.clear(BLACK);
-    M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
-    M5Dial.Display.drawString("Connecting to ", LV_HOR_RES_MAX / 2,
-                          LV_HOR_RES_MAX / 2 - 16);
-
-    M5Dial.Display.drawString("PyPilot", LV_HOR_RES_MAX / 2,
-                          LV_HOR_RES_MAX / 2 + 16);
-    M5Dial.Display.drawString(pypilot_tcp_host.toString(), LV_HOR_RES_MAX / 2,
-                          LV_HOR_RES_MAX / 2 + 44);
-    delay(1000);
-
-    // pypilot_begin(pypClient, pypilot_tcp_host, pypilot_tcp_port); // Connect
-    // to the PyPilot TCP server
-    M5Dial.Display.setFont(&fonts::Orbitron_Light_32);
-
-    return true;
-  }
-  return false;
-}
-
-void drawStandbyScreen() {
-  M5Dial.Display.setFont(&fonts::Orbitron_Light_32);
-  M5Dial.Display.setTextSize(0.5);
-  M5Dial.Display.clear(BLACK);
-  M5Dial.Display.setTextColor(color);
-
-  if (selectedOption == 0) { // Compass
-    M5Dial.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50,
-                       LV_HOR_RES_MAX / 2, 180, 270, selectedColor);
-  } else if (selectedOption == 1) { // GPS
-    M5Dial.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50,
-                       LV_HOR_RES_MAX / 2, 270, 0, selectedColor);
-  } else if (selectedOption == 2) { // Wind
-    M5Dial.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50,
-                       LV_HOR_RES_MAX / 2, 0, 90, selectedColor);
-  } else if (selectedOption == 3) { // True Wind
-    M5Dial.Display.fillArc(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50,
-                       LV_HOR_RES_MAX / 2, 90, 180, selectedColor);
-  }
-
-  M5Dial.Display.drawFastHLine(0, LV_VER_RES_MAX / 2, LV_HOR_RES_MAX, color);
-  M5Dial.Display.drawFastVLine(LV_HOR_RES_MAX / 2, 0, LV_VER_RES_MAX, color);
-
-  M5Dial.Display.drawString("Compass", M5Dial.Display.width() / 4,
-                        M5Dial.Display.height() / 4);
-  M5Dial.Display.drawString("GPS", M5Dial.Display.width() / 4 * 3,
-                        M5Dial.Display.height() / 4);
-  M5Dial.Display.drawString("T Wind", M5Dial.Display.width() / 4,
-                        M5Dial.Display.height() / 4 * 3);
-  M5Dial.Display.drawString("Wind", M5Dial.Display.width() / 4 * 3,
-                        M5Dial.Display.height() / 4 * 3);
-
-  M5Dial.Display.fillCircle(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50,
-                        selectedOption == 4 ? selectedColor : BLACK);
-  M5Dial.Display.drawCircle(LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2, 50, color);
-
-  M5Dial.Display.drawString("Rudder", M5Dial.Display.width() / 2,
-                        M5Dial.Display.height() / 2);
-}
-
-void drawNavigationScreen() {
-  M5Dial.Display.setFont(&fonts::Orbitron_Light_32);
-  M5Dial.Display.setTextSize(1);
-  M5Dial.Display.clear(BLACK);
-
-  M5Dial.Display.drawFloat(round(edit_heading), 0, M5Dial.Display.width() / 2,
-                       M5Dial.Display.height() / 4);
-  M5Dial.Display.setTextSize(2);
-  M5Dial.Display.drawFloat(round(shipDataModel.steering.autopilot.heading.deg), 0,
-                       M5Dial.Display.width() / 2, M5Dial.Display.height() / 2);
-  M5Dial.Display.setTextSize(1);
-  M5Dial.Display.setTextColor(selectingMode ? emphasisColor : color);
-  M5Dial.Display.drawString(modes[edit_mode], M5Dial.Display.width() / 2,
-                        M5Dial.Display.height() / 4 * 3);
-  M5Dial.Display.setTextColor(color);
-
-  M5Dial.Display.fillTriangle(
-      0, LV_VER_RES_MAX / 2, 30, LV_VER_RES_MAX / 2 - 17, 30,
-      LV_VER_RES_MAX / 2 + 17,
-      aboutToTackState == ABOUT_TO_TACK_PORT
-          ? ORANGE
-          : ((shipDataModel.steering.autopilot.tack.st !=
-                  ap_tack_state_e::TACK_NONE &&
-              shipDataModel.steering.autopilot.tack.direction ==
-                  ap_tack_direction_e::TACKING_TO_PORT)
-                 ? emphasisColor
-                 : color));
-
-  M5Dial.Display.fillTriangle(
-      LV_HOR_RES_MAX - 30, LV_VER_RES_MAX / 2 - 17, LV_HOR_RES_MAX - 30,
-      LV_VER_RES_MAX / 2 + 17, LV_HOR_RES_MAX, LV_VER_RES_MAX / 2,
-      aboutToTackState == ABOUT_TO_TACK_STARBOARD
-          ? ORANGE
-          : ((shipDataModel.steering.autopilot.tack.st !=
-                  ap_tack_state_e::TACK_NONE &&
-              shipDataModel.steering.autopilot.tack.direction ==
-                  ap_tack_direction_e::TACKING_TO_STARBOARD)
-                 ? emphasisColor
-                 : color));
-}
-
-void drawRudderScreen() {
-
-  M5Dial.Display.setTextSize(1);
-  M5Dial.Display.clear(BLACK);
-
-  M5Dial.Display.drawFloat(edit_position, 0, M5Dial.Display.width() / 2,
-                       M5Dial.Display.height() / 4);
-  M5Dial.Display.setTextSize(2);
-  M5Dial.Display.drawFloat(round(shipDataModel.steering.autopilot.heading.deg), 0,
-                       M5Dial.Display.width() / 2, M5Dial.Display.height() / 2);
-  M5Dial.Display.setTextSize(1);
-  M5Dial.Display.drawFloat(shipDataModel.steering.rudder_angle.deg, 0,
-                       M5Dial.Display.width() / 2, M5Dial.Display.height() / 4 * 3);
-  last_drawn_position = shipDataModel.steering.rudder_angle.deg;
-}
-
-void drawDetailScreen() {
-  char buffer[128];
-
-  M5Dial.Display.setTextSize(1);
-  M5Dial.Display.clear(BLACK);
-
-  sprintf(buffer, "V: %.1f",
-          shipDataModel.steering.autopilot.ap_servo.voltage.volt);
-  M5Dial.Display.drawString(buffer, M5Dial.Display.width() / 2,
-                        M5Dial.Display.height() / 4);
-
-  sprintf(buffer, "Ah: %.1f",
-          shipDataModel.steering.autopilot.ap_servo.amp_hr.amp_hr);
-  M5Dial.Display.drawString(buffer, M5Dial.Display.width() / 2,
-                        M5Dial.Display.height() / 2);
-
-  sprintf(buffer, "T: %.1f",
-          shipDataModel.steering.autopilot.ap_servo.controller_temp.deg_C);
-  M5Dial.Display.drawString(buffer, M5Dial.Display.width() / 2,
-                        M5Dial.Display.height() / 4 * 3);
-}
-
-void drawReconnectingScreen() {
-  M5Dial.Display.clear(BLACK);
-  M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
-  M5Dial.Display.setTextSize(1);
-
-  M5Dial.Display.drawString("Reconnecting to:", M5Dial.Display.width() / 2,
-                        M5Dial.Display.height() / 2) -
-      32;
-  M5Dial.Display.setTextSize(1);
-  M5Dial.Display.drawString(pypilot_tcp_host.toString(), M5Dial.Display.width() / 2,
-                        M5Dial.Display.height() / 2 + 32);
-  M5Dial.Display.setTextSize(1);
-
-  M5Dial.Display.setFont(&fonts::Orbitron_Light_32);
-}
-
-void drawScreen() {
-  M5Dial.Display.beginTransaction();
-
-  if (!pypClient.c.connected()) {
-    drawReconnectingScreen();
-  } else if (shipDataModel.steering.autopilot.ap_state.st ==
-             ap_state_e::STANDBY) {
-    if (rudderMode) {
-      drawRudderScreen();
-    } else if (detailMode) {
-      drawDetailScreen();
-    } else {
-      drawStandbyScreen();
-    }
-  } else {
-    drawNavigationScreen();
-  }
-
-  M5Dial.Display.endTransaction();
-  redraw = false;
-}
-
-void doUpdateRudder(long count) {
-  edit_position = shipDataModel.steering.rudder_angle.deg - (count * 1.0);
-
-  if (edit_position < -MAX_RUDDER) {
-    edit_position = -MAX_RUDDER;
-  }
-
-  if (edit_position > MAX_RUDDER) {
-    edit_position = MAX_RUDDER;
-  }
-}
-
-void sendRudderCommand() {
-
-  float delta = edit_position - shipDataModel.steering.rudder_angle.deg;
-
-  // Serial.print("Delta: "); Serial.println(String(delta, 2));
-
-  if (fabs(delta) < 0.5) {
-    Serial.print("Servo position at ");
-    Serial.println(
-        String(shipDataModel.steering.autopilot.ap_servo.position.deg, 2));
-    pypilot_send_rudder_command(pypClient.c, 0.0);
-    updateRudder = false;
-  } else {
-
-    float sign = 1.0;
-    if (delta > 0.0) {
-      sign = 1.0;
-    } else {
-      sign = -1.0;
-    }
-    float command = fabs(delta) / 60.0;
-
-    command = min(max(command, float(0.001)), float(1.0));
-    command = command * sign;
-
-    /* Serial.print(String(command, 2));
-    Serial.print(";");
-    Serial.println(String(shipDataModel.steering.autopilot.ap_servo.position.deg,
-    2));
-    */
-
-    pypilot_send_rudder_command(pypClient.c, command);
-  }
-}
-
-void commitRudder(long count) {
-
-  // pypilot_send_rudder_position(pypClient.c, edit_position);
-  // return;
-  updateRudder = true;
-  sendRudderCommand(); // Start without command
-}
-
-bool doRudder() {
-
-  if (M5Dial.BtnA.wasReleased()) {
-    last_touched = millis();
-    rudderMode = false;
-    return true;
-  }
-
-  auto t = M5Dial.Touch.getDetail();
-  if (t.state == T_HOLD_BEGIN) {
-    last_touched = millis();
-    M5Dial.Speaker.tone(2000, 100, 0, false);
-  }
-  if (t.state == T_HOLD_END) {
-
-    last_touched = millis();
-    M5Dial.Speaker.tone(1000, 100, 0, false);
-    edit_position = 0.0;
-    updateRudder = true;
-    sendRudderCommand();
-    redraw = true;
-  }
-
-  redraw = redraw || menu_encoder_update(doUpdateRudder, commitRudder);
-  redraw = redraw || (fabs(last_drawn_position -
-                           shipDataModel.steering.rudder_angle.deg) >= 1.0);
-
-  return redraw;
-}
-
-bool doDetail() {
-
-  if (M5Dial.BtnA.wasReleased()) {
-    last_touched = millis();
-    detailMode = false;
-    return true;
-  }
-  return false;
-}
-
-void updateSteering(long count) {
-
-  if (shipDataModel.steering.autopilot.ap_mode.mode == ap_mode_e::APP_WIND ||
-      shipDataModel.steering.autopilot.ap_mode.mode ==
-          ap_mode_e::APP_WIND_MAG ||
-      shipDataModel.steering.autopilot.ap_mode.mode ==
-          ap_mode_e::APP_WIND_TRUE) {
-    edit_heading = shipDataModel.steering.autopilot.command.deg - (count * 1.0);
-  } else {
-    edit_heading = shipDataModel.steering.autopilot.command.deg + (count * 1.0);
-  }
-
-  if (shipDataModel.steering.autopilot.ap_mode.mode == ap_mode_e::HEADING_MAG ||
-      shipDataModel.steering.autopilot.ap_mode.mode == ap_mode_e::COG_TRUE) {
-    while (edit_heading < 0) {
-      edit_heading += 360.0;
-    }
-
-    while (edit_heading >= 360.0) {
-      edit_heading -= 360.0;
-    }
-  } else {
-    if (edit_heading < -180) {
-      edit_heading = edit_heading + 360.0;
-    }
-
-    if (edit_heading >= 180) {
-      edit_heading = edit_heading - 360.0;
-    }
-  }
-}
-
-void commitSteering(long count) {
-  shipDataModel.steering.autopilot.command.deg = edit_heading;
-  pypilot_send_command(pypClient.c, edit_heading);
-}
-
-void updateMenu(long count) {
-  edit_mode = modeIndex(shipDataModel.steering.autopilot.ap_mode.mode) + count;
-
-  while (edit_mode < 0) {
-    edit_mode = edit_mode + 4;
-  }
-  while (edit_mode >= 4) {
-    edit_mode = edit_mode - 4;
-  }
-
-  Serial.print("Updating mode index to ");
-  Serial.println(edit_mode);
-}
-
-void commitMenu(long count) {
-
-  pypilot_send_mode(pypClient.c, modeCommand(edit_mode));
-
-  selectingMode = false;
-  selectedOption = edit_mode >= 0 ? edit_mode : 4;
-
-  Serial.print("A Commit ");
-  Serial.println(selectedOption);
-
-  Serial.print("Selected option ");
-  Serial.println(selectedOption);
-}
-
-bool doNavigation() {
-  bool doRedraw = false;
-  if (!selectingMode) {
-    if (edit_mode != modeIndex(shipDataModel.steering.autopilot.ap_mode.mode)) {
-      edit_mode = modeIndex(shipDataModel.steering.autopilot.ap_mode.mode);
-      doRedraw = true;
-    }
-  }
-  if (menu_encoder_last_movement == 0) {
-    if (edit_heading != shipDataModel.steering.autopilot.command.deg) {
-
-      edit_heading = shipDataModel.steering.autopilot.command.deg;
-      doRedraw = true;
-    }
-  }
-
-  if (M5Dial.BtnA.wasPressed()) {
-    M5Dial.Speaker.tone(2000, 100, 0, false);
-  }
-  if (M5Dial.BtnA.wasReleased()) {
-    M5Dial.Speaker.tone(1000, 100, 0, false);
-    // shipDataModel.steering.autopilot.ap_state.st = ap_state_e::STANDBY; //
-    // Send  data to pypilot
-    last_touched = millis();
-    oldPosition = M5Dial.Encoder.read();
-    pypilot_send_disengage(pypClient.c);
-    return true;
-  }
-
-  if (selectingMode) {
-    doRedraw = doRedraw || menu_encoder_update(updateMenu, commitMenu);
-  } else {
-    doRedraw = doRedraw || menu_encoder_update(updateSteering, commitSteering);
-  }
-
-  auto t = M5Dial.Touch.getDetail();
-  if (t.state == T_TOUCH_BEGIN) {
-    M5Dial.Speaker.tone(2000, 100, 0, false);
-  }
-  if (t.state == T_TOUCH_END) {
-    M5Dial.Speaker.tone(1000, 100, 0, false);
-    if (shipDataModel.steering.autopilot.tack.st !=
-        ap_tack_state_e::TACK_NONE) {
-      pypilot_send_cancel_tack(pypClient.c);
-    } else if (abs(t.y - LV_VER_RES_MAX) < 60) {
-      selectingMode = !selectingMode;
-      doRedraw = true;
-    } else {
-      edit_heading = shipDataModel.steering.autopilot.heading.deg;
-      commitSteering(0);
-      doRedraw = true;
-    }
-  }
-
-  if (t.state == T_HOLD_BEGIN) {
-
-    if (t.x < 80 && abs(t.y - LV_VER_RES_MAX / 2) < 30) {
-      aboutToTackState = ABOUT_TO_TACK_PORT;
-      doRedraw = true;
-    } else if (t.x > (LV_HOR_RES_MAX - 80) &&
-               abs(t.y - LV_VER_RES_MAX / 2) < 30) {
-      aboutToTackState = ABOUT_TO_TACK_STARBOARD;
-      doRedraw = true;
-    }
-  } else if (t.state == T_HOLD_END) {
-    M5Dial.Speaker.tone(1000, 100, 0, false);
-    if (t.x < 80 && abs(t.y - LV_VER_RES_MAX / 2) < 30) {
-      pypilot_send_tack(pypClient.c, TACK_PORT);
-      doRedraw = true;
-    } else if (t.x > (LV_HOR_RES_MAX - 80) &&
-               abs(t.y - LV_VER_RES_MAX / 2) < 30) {
-      pypilot_send_tack(pypClient.c, TACK_STARBOARD);
-      doRedraw = true;
-    }
-    aboutToTackState = ABOUT_TO_TACK_NONE;
-  }
-
-  if (t.state != T_NONE) {
-    last_touched = millis();
-  }
-
-  return doRedraw;
-}
-
-bool doStandby() {
-  bool doRedraw = false;
-
-  if (M5Dial.BtnA.wasReleasedAfterHold()) {
-    if (color == GREEN) {
-      setNightColor();
-    } else {
-      setDayColor();
-    }
-    doRedraw = true;
-    return true;
-  }
-
-  long newPosition = M5Dial.Encoder.read();
-  if (newPosition != oldPosition) {
-    M5Dial.Speaker.tone(3000, 30, 0, false);
-    last_touched = millis();
-    int delta = newPosition - oldPosition;
-    selectedOption = selectedOption += delta;
-
-    while (selectedOption < 0) {
-      selectedOption += 5;
-    }
-    while (selectedOption > 4) {
-      selectedOption -= 5;
-    }
-    Serial.print("New Option ");
-    Serial.println(selectedOption);
-    doRedraw = true;
-  }
-  // Touch
-  auto t = M5Dial.Touch.getDetail();
-  oldPosition = M5Dial.Encoder.read();
-
-  bool enable_touch = true;
-  /*
-    if (t.state == T_TOUCH_BEGIN && enable_touch)
-    {
-      M5Dial.Speaker.tone(2000, 100, 0, false);
-    }
-    */
-  if (t.state == T_HOLD_BEGIN && enable_touch) {
-    M5Dial.Speaker.tone(3000, 100, 0, false);
-  }
-  if (t.state == T_HOLD_END && enable_touch) {
-    M5Dial.Speaker.tone(1000, 100, 0, false);
-    // Check if in the center.
-
-    if (abs(t.x - LV_HOR_RES_MAX / 2) < 20 &&
-        abs(t.y - LV_VER_RES_MAX / 2) < 20) {
-      shipDataModel.steering.autopilot.ap_state.st =
-          ap_state_e::STANDBY; // Send  data to pypilot
-      rudderMode = true;
-      updateRudder = false;
-      edit_position = shipDataModel.steering.autopilot.ap_servo.position.deg;
-      selectedOption = 4;
-      doRedraw = true;
-    } else if (t.y < LV_VER_RES_MAX / 2) {
-      if (t.x < LV_VER_RES_MAX / 2) {
-        Serial.println("Selected Compass");
-        oldPosition = M5Dial.Encoder.read();
-        pypilot_send_engage(pypClient.c);
-        pypilot_send_mode(pypClient.c, AP_MODE_COMPASS);
-        edit_heading = shipDataModel.steering.autopilot.heading.deg;
-        commitSteering(0);
-        shipDataModel.steering.autopilot.ap_state.st =
-            ap_state_e::ENGAGED; // Send  data to pypilot
-        shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::HEADING_MAG;
-        selectedOption = 0;
-      } else {
-        Serial.println("Selected GPS");
-        oldPosition = M5Dial.Encoder.read();
-        pypilot_send_engage(pypClient.c);
-        pypilot_send_mode(pypClient.c, AP_MODE_GPS);
-        edit_heading = shipDataModel.steering.autopilot.heading.deg;
-        commitSteering(0);
-        shipDataModel.steering.autopilot.ap_state.st =
-            ap_state_e::ENGAGED; // Send  data to pypilot
-        shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::COG_TRUE;
-        selectedOption = 1;
-      }
-    } else {
-      if (t.x < LV_HOR_RES_MAX / 2) {
-        Serial.println("Selected True Wind");
-        pypilot_send_engage(pypClient.c);
-        pypilot_send_mode(pypClient.c, AP_MODE_WIND_TRUE);
-        // edit_heading = shipDataModel.steering.autopilot.heading.deg;
-        // commitSteering(0);
-        shipDataModel.steering.autopilot.ap_state.st =
-            ap_state_e::ENGAGED; // Send  data to pypilot
-        shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::TRUE_WIND;
-        selectedOption = 3;
-      } else {
-        Serial.println("Selected Wind");
-        oldPosition = M5Dial.Encoder.read();
-        pypilot_send_engage(pypClient.c);
-        pypilot_send_mode(pypClient.c, AP_MODE_WIND);
-        // edit_heading = shipDataModel.steering.autopilot.heading.deg;
-        //  commitSteering(0);
-        shipDataModel.steering.autopilot.ap_state.st =
-            ap_state_e::ENGAGED; // Send  data to pypilot
-        shipDataModel.steering.autopilot.ap_mode.mode = ap_mode_e::APP_WIND;
-        selectedOption = 2;
-      }
-    }
-    doRedraw = true;
-  }
-  /*
-  else if (t.state == T_HOLD_END && enable_touch)
-  {
-    rudderMode = false;
-    detailMode = true;
-    doRedraw = true;
-  }
-  */
-
-  if (M5Dial.BtnA.wasPressed()) {
-    M5Dial.Speaker.tone(2000, 100, 0, false);
-  }
-  if (M5Dial.BtnA.wasReleased()) {
-    M5Dial.Speaker.tone(1000, 100, 0, false);
-    // shipDataModel.steering.autopilot.ap_state.st = ap_state_e::STANDBY; //
-    // Send  data to pypilot
-    last_touched = millis();
-    oldPosition = M5Dial.Encoder.read();
-    switch (selectedOption) {
-
-    case 0: // Compass
-      pypilot_send_mode(pypClient.c, AP_MODE_COMPASS);
-      edit_heading = shipDataModel.steering.autopilot.heading.deg;
-      pypilot_send_engage(pypClient.c);
-      commitSteering(0);
-      break;
-      // shipDataModel.steering.autopilot.ap_state.st = ap_state_e::ENGAGED; //
-      // Send  data to pypilot shipDataModel.steering.autopilot.ap_mode.mode =
-      // ap_mode_e::HEADING_MAG;
-
-    case 1: // GPS
-      pypilot_send_mode(pypClient.c, AP_MODE_GPS);
-      edit_heading = shipDataModel.steering.autopilot.heading.deg;
-      pypilot_send_engage(pypClient.c);
-      commitSteering(0);
-      break;
-
-    case 2: // Wind
-      pypilot_send_engage(pypClient.c);
-      pypilot_send_mode(pypClient.c, AP_MODE_WIND);
-      // edit_heading = shipDataModel.steering.autopilot.heading.deg;
-      // commitSteering(0);
-      break;
-
-    case 3: // True Wind
-      pypilot_send_engage(pypClient.c);
-      pypilot_send_mode(pypClient.c, AP_MODE_WIND_TRUE);
-      // edit_heading = shipDataModel.steering.autopilot.heading.deg;
-      // commitSteering(0);
-      break;
-
-    case 4: // Rudder
-      rudderMode = true;
-      updateRudder = false;
-      edit_position = shipDataModel.steering.autopilot.ap_servo.position.deg;
-      break;
-
-    default:
-      break;
-    }
-    doRedraw = true;
-  }
-
-  if (t.state != T_NONE) {
-    last_touched = millis();
-  }
-  return doRedraw;
-}
-
-/* Encoder tas
-  Associated to either an int or a float. Preferibly a float
-  Must hava a max and a min
-  An option is if they roll around
-    - If true min goes to max and oposite
-    - If false stops at max or min and rests there
-  A scale that translates clicks to values
-  A Timeout to make the value efective
-  A Callback to call when changing value : onChange
-  A Callback when timeout passed : onSubmit
-
-
-  Variables
-
-    - int value, oldvalue : Valor del encoder
-    - timer0 value dels millis() from last value change. If 0 ,deactivated
-    - timeout time not to touch the encoder to get a value
-    -
-
-*/
-
-bool loopTask() {
-
-  if (displaySaver == DISPLAY_SLEEPING) {
-    auto t = M5Dial.Touch.getDetail();
-    if (M5Dial.BtnA.isPressed() || t.state == T_TOUCH_BEGIN) {
-      displaySaver = DISPLAY_WAKING;
-      return false;
-    } else {
-      last_touched = 0;
-      return false;
-    }
-  } else if (displaySaver == DISPLAY_WAKING) {
-    auto t = M5Dial.Touch.getDetail();
-    if (!M5Dial.BtnA.isPressed() && t.state == T_NONE) {
-      last_touched = millis();
-      return true;
-    } else {
-      last_touched = 0;
-      return false;
-    }
-  } else {
-    if (shipDataModel.steering.autopilot.ap_state.st == ap_state_e::STANDBY) {
-      if (rudderMode) {
-        return doRudder();
-      } else if (detailMode) {
-        return doDetail();
-      } else {
-        return doStandby();
-      }
-    } else {
-      return doNavigation();
-    }
-  }
-}
-
-void splash() {
-  M5Dial.Display.setTextColor(color);
-  M5Dial.Display.setTextDatum(middle_center);
-  M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
-  M5Dial.Display.setTextSize(1);
-  M5Dial.Display.drawString("AUTOPILOT", LV_HOR_RES_MAX / 2,
-                        LV_VER_RES_MAX / 2 - 16);
-  M5Dial.Display.drawString("Paco Gorina", LV_HOR_RES_MAX / 2,
-                        LV_VER_RES_MAX / 2 + 16);
-  M5Dial.Display.drawString(version, LV_HOR_RES_MAX / 2, LV_VER_RES_MAX / 2 + 48);
-  M5Dial.Display.setFont(&fonts::Orbitron_Light_32);
-  delay(5000);
-}
+// --- Preferences -------------------------------------------------------------
 
 void writePreferences() {
-  preferences.begin("M5_pypilot", false);
-  preferences.clear();
-  /* preferences.remove("SSID");
-   preferences.remove("PASSWD");
-   preferences.remove("PPHOST");
-   preferences.remove("PPPORT");
-   */
-
-  preferences.putString("SSID", wifi_ssid);
-  preferences.putString("PASSWD", wifi_password);
-  preferences.putUInt("PPHOST", pypilot_tcp_host);
-  preferences.putInt("PPPORT", pypilot_tcp_port);
-  preferences.end();
-
-  Serial.print(" Written to Preferences ");
-  Serial.println(pypilot_tcp_host.toString());
-}
-
-
-void lookupPypilot() {
-  if (pypilot_tcp_host.toString() == "0.0.0.0" || pypilot_tcp_port <= 0) {
-    Serial.printf("Looking up into mDNS \n");
-    M5Dial.Display.clear(BLACK);
-    M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
-    M5Dial.Display.drawString("Searching", LV_HOR_RES_MAX / 2, LV_HOR_RES_MAX / 2);
-
-    mdns_begin();
-    if (mdns_query_svc("pypilot", "tcp") > 0) {
-      pypilot_tcp_host = MDNS.address(0);
-      pypilot_tcp_port = MDNS.port(0);
-      Serial.printf("Found PyPilot at %s:%d \n", pypilot_tcp_host.toString(),
-                   pypilot_tcp_port);
-    } else {
-      pypilot_tcp_host = IPAddress(192, 168, 1, 148);
-      pypilot_tcp_port = 23322;
-      Serial.printf("Not found PyPilot, using default value \n");
-    }
-    writePreferences();
-    mdns_end();
-  }
+  prefs.begin("pypilot", false);
+  prefs.putString("SSID", config.wifiSsid);
+  prefs.putString("PASSWD", config.wifiPassword);
+  prefs.putString("PPSERVER", config.ppServer);
+  prefs.putInt("PPPORT", config.ppPort);
+  prefs.putString("DEVNAME", config.deviceName);
+  prefs.end();
 }
 
 void readPreferences() {
+  prefs.begin("pypilot", true);
+  config.wifiSsid = prefs.getString("SSID", config.wifiSsid);
+  config.wifiPassword = prefs.getString("PASSWD", config.wifiPassword);
+  config.ppServer = prefs.getString("PPSERVER", config.ppServer);
+  config.ppPort = prefs.getInt("PPPORT", config.ppPort);
+  config.deviceName = prefs.getString("DEVNAME", "");
+  prefs.end();
 
-  preferences.begin("M5_pypilot", true);
-  wifi_ssid = preferences.getString("SSID", wifi_ssid);
-  wifi_password = preferences.getString("PASSWD", wifi_password);
-  pypilot_tcp_host = IPAddress(preferences.getUInt("PPHOST"));
-  pypilot_tcp_port = preferences.getInt("PPPORT", pypilot_tcp_port);
-  preferences.end();
+  if (config.deviceName.isEmpty()) {
+    config.deviceName = "PYPILOT_" + String(random(100, 1000));
+    prefs.begin("pypilot", false);
+    prefs.putString("DEVNAME", config.deviceName);
+    prefs.end();
+  }
 
-  Serial.print(" Read from Preferences ");
-  Serial.println(pypilot_tcp_host.toString());
+  Serial.println("=== Config ===");
+  Serial.println("SSID:   " + config.wifiSsid);
+  Serial.println("PP:     " + config.ppServer + ":" + String(config.ppPort));
+  Serial.println("Device: " + config.deviceName);
+  Serial.println("==============");
+}
 
-  if (M5Dial.BtnA.isPressed()) {
-    Serial.println("Resetting PyPilot Host");
+void resetNetwork() {
+  config.wifiSsid = "";
+  config.wifiPassword = "";
+  config.ppServer = "";
+  config.ppPort = 23322;
+  String deviceName;
+  writePreferences();
+  ESP.restart();
+}
 
-    pypilot_tcp_port = 0;
-    M5Dial.Display.clear(BLACK);
-    M5Dial.Display.setFont(&fonts::Orbitron_Light_24);
-    M5Dial.Display.drawString("Cleared Host", LV_HOR_RES_MAX / 2,
-                          LV_HOR_RES_MAX / 2);
-    delay(5000);
-  } else {
-    Serial.println(pypilot_tcp_host.toString());
+// --- Screen switching --------------------------------------------------------
+
+void switchTo(int idx) {
+  if (idx < 0 || idx >= (int)screens.size())
+    return;
+  if (screens[idx] == currentScreen)
+    return;
+
+  if (state.displaySaver != DisplaySaverState::ACTIVE) {
+    M5.Display.wakeup();
+    M5.Display.setBrightness(128);
+    state.displaySaver = DisplaySaverState::ACTIVE;
+    lastTouched = millis();
+  }
+  if (currentScreen)
+    currentScreen->exit(state);
+  currentScreen = screens[idx];
+  currentScreen->enter(state);
+}
+
+// --- WiFi --------------------------------------------------------------------
+// --- WiFi
+// ---------------------------------------------------------------------
+bool checkConnection() { return WiFi.status() == WL_CONNECTED; }
+
+bool startWiFi() {
+  static bool servicesStarted = false;
+  if (WiFi.status() == WL_CONNECTED)
+    return true;
+
+  Serial.println("Connecting to " + config.wifiSsid);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(config.wifiSsid.c_str(), config.wifiPassword.c_str());
+
+  int tries = 0;
+  while (WiFi.status() != WL_CONNECTED && tries < 100) {
+    vTaskDelay(pdMS_TO_TICKS(100));
+    tries++;
+  }
+  if (WiFi.status() != WL_CONNECTED)
+    return false;
+
+  myIp = WiFi.localIP().toString();
+  Serial.println("Connected, IP: " + myIp);
+
+  if (!servicesStarted) {
+    configTime(0, 0, "europe.pool.ntp.org");
+    MDNS.begin(config.deviceName.c_str());
+    webServer->begin();
+    servicesStarted = true;
+  }
+  return true;
+}
+
+static bool startWiFiAP() {
+  Serial.println("Starting AP: " + config.deviceName);
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(config.deviceName.c_str(), "12345678");
+  myIp = WiFi.softAPIP().toString();
+  Serial.println("AP IP: " + myIp);
+  MDNS.begin(config.deviceName.c_str());
+  webServer->begin();
+  return true;
+}
+
+// --- Splash ------------------------------------------------------------------
+
+static void splash() {
+  M5.Display.clear();
+  M5.Display.setFont(&fonts::Orbitron_Light_24);
+  M5.Display.setTextDatum(TC_DATUM);
+  M5.Display.setTextColor(TFT_GREEN, TFT_BLACK);
+  M5.Display.drawString("AUTOPILOT", M5.Display.width() / 2, 40);
+  M5.Display.setFont(&fonts::FreeSans9pt7b);
+  M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+  M5.Display.setTextDatum(CL_DATUM);
+  M5.Display.drawString("WiFi: " + config.wifiSsid, 10, 100);
+  M5.Display.drawString("PP:   " + config.ppServer, 10, 130);
+  M5.Display.drawString("Dev:  " + config.deviceName, 10, 160);
+  M5.Display.setTextDatum(CC_DATUM);
+  M5.Display.setTextColor(TFT_YELLOW, TFT_BLACK);
+  M5.Display.drawString("Hold to reset WiFi", M5.Display.width() / 2, 210);
+
+  // 5-second splash — long press resets stored WiFi
+  unsigned long start = millis();
+  long pressAt = -1;
+  while (millis() - start < 10000) {
+    M5.update();
+    if (M5.Touch.getCount() > 0) {
+      auto t = M5.Touch.getDetail(0);
+      if (t.wasPressed())
+        pressAt = millis();
+      if (t.wasReleased() && pressAt >= 0) {
+        if (millis() - pressAt > 1000)
+          resetNetwork();
+        pressAt = -1;
+      }
+    }
+    delay(10);
   }
 }
 
-void setup() {
+// --- Network task (core 1) ---------------------------------------------------
 
-  M5Dial.begin(true, false);
-  Serial.begin(115200);
+static NetPylotParams netParams;
 
-  // Setup General WiFI
-  WiFi.setAutoReconnect(true);
-  WiFi.mode(WIFI_STA);
-
-  splash();
-  M5Dial.update();
-  readPreferences();
-
-  M5Dial.Speaker.setVolume(128);
-  last_touched = millis();
-
-  setup_ble();
-
-  xTaskCreatePinnedToCore(
-      netPylotTask, "netPylot",
-      4096, // watch this if you get stack overflows; String + TCP eats stack
-      nullptr, 5, nullptr,
-      1 // core 1, leave core 0 for UI
-  );
-}
-// Encoder dona 64 / volta
-
-#define GO_SLEEP_TIMEOUT 600000ul // 50 '
-
-void loop() {
-
-  M5Dial.update();
-
-  /*  if (!checkConnection())
-    {
+static void networkTask(void *) {
+  while (true) {
+    if (!config.wifiSsid.isEmpty() && !checkConnection()) {
       startWiFi();
     }
-      */
+    webServer->handleClient();
+    vTaskDelay(10);
+  }
+}
 
-  redraw = redraw || loopTask();
+// --- Physical button handling ------------------------------------------------
 
-  if (last_touched > 0 && (millis() - last_touched > GO_SLEEP_TIMEOUT)) {
-    // disconnect_clients();
-    // save_page(page);
-    // deep_sleep_with_touch_wakeup();
-    Serial.println("Going to sleep");
-    last_touched = 0;
-    displaySaver = DISPLAY_SLEEPING;
-    M5Dial.Display.sleep(); // powerSaveOn();
-    M5Dial.Display.setBrightness(0);
-  } else if (last_touched != 0 && displaySaver == DISPLAY_WAKING) {
-    Serial.println("Waking Up");
-    displaySaver = DISPLAY_ACTIVE;
-    M5Dial.Display.wakeup(); // powerSaveOff();
-    M5Dial.Display.setBrightness(255);
-    redraw = true;
+static void handlePhysicalButtons() {
+  bool stopLow = (digitalRead(PIN_STOP) == LOW);
+  bool startLow = (digitalRead(PIN_START) == LOW);
+
+  // STOP: edge LOW → act; while held, keep re-sending disengage if AP
+  //       gets re-engaged by another device (emergency stop behaviour).
+  if (stopLow) {
+    if (!stopBtnWasLow) {
+      // Falling edge — immediate disengage
+      pypilot_cmd_disengage();
+      stopBtnWasLow = true;
+    } else if (state.apState == ApState::ENGAGED) {
+      // Still held and something re-engaged the AP → disengage again
+      pypilot_cmd_disengage();
+    }
+  } else {
+    stopBtnWasLow = false;
   }
 
-  if (redraw) {
-    drawScreen();
+  // START: rising-edge trigger; only acts when STOP is not held.
+  if (startLow && !stopLow) {
+    if (!startBtnWasLow) {
+      startBtnWasLow = true;
+    }
+  } else if (!startLow && startBtnWasLow) {
+    // Rising edge: engage in Compass mode with current heading
+    startBtnWasLow = false;
+    if (!stopLow) {
+      pypilot_cmd_mode("compass");
+      pypilot_cmd_engage();
+      pypilot_cmd_heading(state.heading);
+      switchTo(1); // go to PilotScreen
+      lastTouched = millis();
+    }
   }
+}
+
+// --- Setup -------------------------------------------------------------------
+
+void setup() {
+  Serial.begin(115200);
+
+  auto cfg = M5.config();
+  M5.begin(cfg);
+
+  M5.Display.setFont(&fonts::FreeSans9pt7b);
+  M5.Display.setTextSize(1.0f);
+
+  // Physical buttons with pull-ups
+  pinMode(PIN_STOP, INPUT_PULLUP);
+  pinMode(PIN_START, INPUT_PULLUP);
+
+  readPreferences();
+
+  gCmdQueue = xQueueCreate(16, sizeof(PylotCmd));
+
+  webServer = new NetWebServer(&config, 80, writePreferences);
+  bleServer = new BleServer(&config, writePreferences);
+
+  if (!config.wifiSsid.isEmpty()) {
+    splash();
+  } else {
+    startWiFiAP();
+  }
+
+  bleServer->setup();
+
+  // Screens: 0 = Mode, 1 = Pilot, 2 = Rudder
+  screens.push_back(new ModeScreen(M5.Display.width(), M5.Display.height()));
+  screens.push_back(new PilotScreen(M5.Display.width(), M5.Display.height()));
+  screens.push_back(new RudderScreen(M5.Display.width(), M5.Display.height()));
+
+  // Network tasks on core 1
+  netParams = {&config, &state};
+  xTaskCreatePinnedToCore(netPylotTask, "netPylot", 8192, &netParams, 5,
+                          nullptr, 1);
+  xTaskCreate(networkTask, "network", 4096, nullptr, 1, nullptr);
+
+  lastTouched = millis();
+  switchTo(0);
+}
+
+// --- Loop --------------------------------------------------------------------
+
+void loop() {
+  M5.update();
+
+  handlePhysicalButtons();
+
+  auto &t = M5.Touch.getDetail(0);
+
+  // Display saver
+  if (M5.Touch.getCount() > 0 && (t.wasPressed() || t.wasReleased()))
+    lastTouched = millis();
+
+  if (state.displaySaver == DisplaySaverState::SLEEPING) {
+    if (t.wasPressed()) {
+      M5.Display.wakeup();
+      M5.Display.setBrightness(128);
+      state.displaySaver = DisplaySaverState::WAKING;
+    }
+    vTaskDelay(pdMS_TO_TICKS(50));
+    return;
+  }
+  if (state.displaySaver == DisplaySaverState::WAKING) {
+    if (t.wasReleased()) {
+      state.displaySaver = DisplaySaverState::ACTIVE;
+      lastTouched = millis();
+      if (currentScreen)
+        currentScreen->draw(state);
+    }
+    vTaskDelay(pdMS_TO_TICKS(50));
+    return;
+  }
+  if (millis() - lastTouched > SLEEP_TIMEOUT_MS) {
+    M5.Display.sleep();
+    M5.Display.setBrightness(0);
+    state.displaySaver = DisplaySaverState::SLEEPING;
+    return;
+  }
+
+  // Run current screen
+  if (currentScreen) {
+    int next = currentScreen->run(t, state);
+    if (next >= 0 && next < (int)screens.size())
+      switchTo(next);
+  }
+
+  // BLE periodic notify
+  unsigned long now = millis();
+  if (bleServer && bleServer->isConnected() &&
+      now - lastBleNotify > BLE_NOTIFY_MS) {
+    bleServer->notifyAll(state);
+    lastBleNotify = now;
+  }
+
+  vTaskDelay(pdMS_TO_TICKS(20));
 }
