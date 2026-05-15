@@ -18,8 +18,14 @@ static void tcp_greet(WiFiClient &c) {
     c.println(F("watch={\"rudder.angle\":0}"));
 }
 
-static void tcp_engage   (WiFiClient &c) { c.println(F("ap.enabled=true")); }
-static void tcp_disengage(WiFiClient &c) { c.println(F("ap.enabled=false")); }
+static void tcp_engage   (WiFiClient &c) { 
+    Serial.println("Engaging autopilot");
+    c.println(F("ap.enabled=true")); 
+}
+static void tcp_disengage(WiFiClient &c) { 
+    Serial.println("Disengaging autopilot");
+    c.println(F("ap.enabled=false")); 
+}
 
 static void tcp_mode(WiFiClient &c, const char *mode) {
     c.print(F("ap.mode=\""));
@@ -28,6 +34,7 @@ static void tcp_mode(WiFiClient &c, const char *mode) {
 }
 
 static void tcp_heading(WiFiClient &c, float h) {
+    Serial.println("ap.heading_command=" + String(h, 1));
     c.print(F("ap.heading_command="));
     c.println(String(h, 1));
 }

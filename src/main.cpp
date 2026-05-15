@@ -297,7 +297,7 @@ void setup() {
 void loop() {
   M5.update();
 
-  handlePhysicalButtons();
+  //handlePhysicalButtons();
 
   auto &t = M5.Touch.getDetail(0);
 
