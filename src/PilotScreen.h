@@ -33,7 +33,8 @@ private:
     TackDir   _lastTackDir  = TackDir::PORT;
     PaletteId _lastPalette  = static_cast<PaletteId>(-1);
 
-    bool          _stopPressed = false;
+    bool          _stopPressed      = false;
+    bool          _modeLabelPressed = false;
     int           _armed      = 0;   // -1 port armed, 0 none, +1 stbd armed
     int           _lastArmed  = 0;
     int           _holdDir    = 0;   // direction of in-progress long-press

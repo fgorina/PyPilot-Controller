@@ -18,6 +18,7 @@ static constexpr int STOP_X  = 242, STOP_Y = MARGIN, STOP_W = 74, STOP_H = 74, S
 static constexpr int CMD_Y   = 50;    // command line centre y
 static constexpr int HDG_Y   = 130;   // heading number centre y
 static constexpr int ARR_HALF = 22, ARR_DEPTH = 28;
+static constexpr int MODE_BTN_W = 100; // mode label button width
 static constexpr int TACK_W  = 80;   // touch-zone width for tack arrows
 static constexpr int TACK_Y0 = 80;   // top of tack touch zone
 
@@ -49,7 +50,8 @@ void PilotScreen::enter(State &state) {
     _lastCommand = -9999.0f;
     _lastTackSt  = TackState::BEGIN;
     _lastPalette = static_cast<PaletteId>(-1);
-    _stopPressed = false;
+    _stopPressed      = false;
+    _modeLabelPressed = false;
     _armed      = 0;
     _lastArmed  = 0;
     _holdDir     = 0;
@@ -73,32 +75,55 @@ void PilotScreen::draw(State &state) {
 
     canvas->clear(pal.bg);
 
-    // --- Top bar: mode label ---
-    canvas->setFont(&fonts::FreeSans9pt7b);
-    canvas->setTextSize(1);
-    canvas->setTextColor(pal.fg, pal.bg);
-    canvas->setTextDatum(ML_DATUM);
-    canvas->drawString(state.modeString(), 6, TOP_H / 2);
-
-    // --- STOP button (octagon) ---
+    // --- Top bar: mode label (tappable button → ModeScreen) ---
     {
-        uint16_t stopFill = _stopPressed ? TFT_WHITE : TFT_RED;
-        uint16_t stopText = _stopPressed ? TFT_RED   : TFT_WHITE;
-        int ox = STOP_X, oy = STOP_Y, ow = STOP_W, oh = STOP_H, c = STOP_CUT;
-        int cx = ox + ow/2, cy = oy + oh/2;
-        int16_t vx[8] = { int16_t(ox+c),    int16_t(ox+ow-c), int16_t(ox+ow), int16_t(ox+ow),
-                           int16_t(ox+ow-c), int16_t(ox+c),    int16_t(ox),    int16_t(ox) };
-        int16_t vy[8] = { int16_t(oy),       int16_t(oy),      int16_t(oy+c),  int16_t(oy+oh-c),
-                           int16_t(oy+oh),    int16_t(oy+oh),   int16_t(oy+oh-c), int16_t(oy+c) };
-        for (int i = 0; i < 8; i++)
-            canvas->fillTriangle(cx, cy, vx[i], vy[i], vx[(i+1)%8], vy[(i+1)%8], stopFill);
-        for (int i = 0; i < 8; i++)
-            canvas->drawLine(vx[i], vy[i], vx[(i+1)%8], vy[(i+1)%8], pal.fg);
-        canvas->setFont(&fonts::FreeSansBold12pt7b);
+        bool mp = _modeLabelPressed;
+        uint16_t modeBg = mp ? pal.fg : pal.bg;
+        uint16_t modeFg = mp ? pal.bg : pal.fg;
+        canvas->fillRect(2, 2, MODE_BTN_W, TOP_H - 4, modeBg);
+        canvas->drawRect(2, 2, MODE_BTN_W, TOP_H - 4, pal.fg);
+        canvas->setFont(&fonts::FreeSansBold9pt7b);
         canvas->setTextSize(1);
-        canvas->setTextColor(stopText, stopFill);
-        canvas->setTextDatum(MC_DATUM);
-        canvas->drawString("STOP", cx, cy);
+        canvas->setTextColor(modeFg, modeBg);
+        canvas->setTextDatum(ML_DATUM);
+        canvas->drawString(state.modeString(), 8, TOP_H / 2);
+    }
+
+    // --- STOP (engaged) / RUN (disengaged) button ---
+    {
+        bool engaged = (state.apState == ApState::ENGAGED);
+        int ox = STOP_X, oy = STOP_Y, ow = STOP_W, oh = STOP_H;
+        int cx = ox + ow/2, cy = oy + oh/2;
+
+        if (engaged) {
+            uint16_t stopFill = _stopPressed ? TFT_WHITE : TFT_RED;
+            uint16_t stopText = _stopPressed ? TFT_RED   : TFT_WHITE;
+            int c = STOP_CUT;
+            int16_t vx[8] = { int16_t(ox+c),    int16_t(ox+ow-c), int16_t(ox+ow), int16_t(ox+ow),
+                               int16_t(ox+ow-c), int16_t(ox+c),    int16_t(ox),    int16_t(ox) };
+            int16_t vy[8] = { int16_t(oy),       int16_t(oy),      int16_t(oy+c),  int16_t(oy+oh-c),
+                               int16_t(oy+oh),    int16_t(oy+oh),   int16_t(oy+oh-c), int16_t(oy+c) };
+            for (int i = 0; i < 8; i++)
+                canvas->fillTriangle(cx, cy, vx[i], vy[i], vx[(i+1)%8], vy[(i+1)%8], stopFill);
+            for (int i = 0; i < 8; i++)
+                canvas->drawLine(vx[i], vy[i], vx[(i+1)%8], vy[(i+1)%8], pal.fg);
+            canvas->setFont(&fonts::FreeSansBold12pt7b);
+            canvas->setTextSize(1);
+            canvas->setTextColor(stopText, stopFill);
+            canvas->setTextDatum(MC_DATUM);
+            canvas->drawString("STOP", cx, cy);
+        } else {
+            int r = (ow < oh ? ow : oh) / 2;
+            uint16_t runFill = _stopPressed ? TFT_WHITE : TFT_GREEN;
+            uint16_t runText = _stopPressed ? TFT_GREEN : TFT_BLACK;
+            canvas->fillCircle(cx, cy, r, runFill);
+            canvas->drawCircle(cx, cy, r, pal.fg);
+            canvas->setFont(&fonts::FreeSansBold12pt7b);
+            canvas->setTextSize(1);
+            canvas->setTextColor(runText, runFill);
+            canvas->setTextDatum(MC_DATUM);
+            canvas->drawString("RUN", cx, cy);
+        }
     }
 
     // --- Command (setpoint) ---
@@ -172,7 +197,23 @@ int PilotScreen::run(const m5::touch_detail_t &t, State &state) {
 
     int tx = t.x, ty = t.y;
 
-    // --- STOP button ---
+    // --- Mode label button → ModeScreen ---
+    bool inMode = (tx >= 2 && tx < 2 + MODE_BTN_W && ty >= 2 && ty < TOP_H);
+    if (inMode && t.wasPressed()) {
+        M5.Speaker.tone(1000, 100, 0, false);
+        _modeLabelPressed = true;
+        draw(state);
+    } else if (_modeLabelPressed && t.wasReleased()) {
+        _modeLabelPressed = false;
+        if (inMode) {
+            M5.Speaker.tone(2000, 100, 0, false);
+            return 0;
+        }
+        draw(state);
+    }
+
+    // --- STOP (engaged) / RUN (disengaged) button ---
+    bool engaged = (state.apState == ApState::ENGAGED);
     bool inStop = (tx >= STOP_X && tx < STOP_X + STOP_W &&
                    ty >= STOP_Y && ty < STOP_Y + STOP_H);
     if (inStop && t.wasPressed()) {
@@ -183,8 +224,13 @@ int PilotScreen::run(const m5::touch_detail_t &t, State &state) {
         M5.Speaker.tone(inStop ? 2000 : 500, 100, 0, false);
         _stopPressed = false;
         if (inStop) {
-            pypilot_cmd_disengage();
-            return 0;
+            if (engaged) {
+                pypilot_cmd_disengage();
+            } else {
+                pypilot_cmd_engage();
+                if (state.apMode == ApMode::COMPASS || state.apMode == ApMode::GPS)
+                    pypilot_cmd_heading(state.heading);
+            }
         }
         draw(state);
     }

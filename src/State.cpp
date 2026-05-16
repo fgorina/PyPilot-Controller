@@ -20,7 +20,7 @@ const char *State::modeString() const {
         case ApMode::COMPASS:   return "Compass";
         case ApMode::GPS:       return "GPS";
         case ApMode::WIND:      return "Wind";
-        case ApMode::TRUE_WIND: return "True Wind";
+        case ApMode::TRUE_WIND: return "T Wind";
         default:                return "---";
     }
 }
