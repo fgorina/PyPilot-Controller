@@ -128,8 +128,8 @@ void BleServer::SrvCallbacks::onDisconnect(BLEServer *) {
 
 void BleServer::ChrCallbacks::onWrite(BLECharacteristic *chr) {
     if (!_instance) return;
-    std::string uuid  = chr->getUUID().toString();
-    std::string value = chr->getValue();
+    std::string uuid  = chr->getUUID().toString().c_str();
+    std::string value = chr->getValue().c_str();
     if (value.empty()) return;
 
     if (uuid == BLE_WIFI_NAME_UUID) {

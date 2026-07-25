@@ -251,19 +251,19 @@ static void handlePhysicalButtons() {
 
 void setup() {
   Serial.begin(115200);
-
+  Serial.println ("About to start");
   auto cfg = M5.config();
   M5.begin(cfg);
-
+  Serial.println ("M5 COnfigured");
   M5.Display.setFont(&fonts::FreeSans9pt7b);
   M5.Display.setTextSize(1.0f);
 
   // Physical buttons with pull-ups
-  pinMode(PIN_STOP, INPUT_PULLUP);
-  pinMode(PIN_START, INPUT_PULLUP);
+  //pinMode(PIN_STOP, INPUT_PULLUP);
+  //pinMode(PIN_START, INPUT_PULLUP);
 
   readPreferences();
-
+  Serial.println ("Preferences READ");
   gCmdQueue = xQueueCreate(16, sizeof(PylotCmd));
 
   webServer = new NetWebServer(&config, 80, writePreferences);

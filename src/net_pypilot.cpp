@@ -92,7 +92,7 @@ static IPAddress resolve_host(AppConfig &config) {
     if (MDNS.begin("pypilot_ctrl")) {
         int n = MDNS.queryService("pypilot", "tcp");
         if (n > 0) {
-            ip              = MDNS.IP(0);
+            ip              = MDNS.address(0);
             config.ppPort   = MDNS.port(0);
             config.ppServer = ip.toString();
             Serial.printf("mDNS found pypilot at %s:%d\n",
