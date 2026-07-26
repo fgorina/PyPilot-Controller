@@ -14,7 +14,7 @@ BleServer::BleServer(AppConfig *cfg, void (*onSave)())
 }
 
 void BleServer::setup() {
-    BLEDevice::init(_config->deviceName.c_str());
+    BLEDevice::init("PYPILOT");
 
     BLEServer  *srv = BLEDevice::createServer();
     srv->setCallbacks(new SrvCallbacks());
