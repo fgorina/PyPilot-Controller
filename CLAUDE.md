@@ -117,8 +117,8 @@ pio run           # build
 pio run -t upload # flash
 ```
 
-- Target: `m5stack-core2` (defined in `platformio.ini`)
-- Partition table: `partitions.csv`
+- Target: `m5stack-cores3` (defined in `platformio.ini`)
+- Partition table: `default_16MB.csv`
 - Display driver: LovyanGFX — **avoid single-argument `setTextColor()`** (always pass background colour as second argument)
 - PSRAM is required and assumed available
 - Entry point: `src/main.cpp`

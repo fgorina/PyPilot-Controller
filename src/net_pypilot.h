@@ -15,7 +15,8 @@ struct PylotCmd {
         HEADING,        // fval holds the heading in degrees
         TACK_PORT, TACK_STBD, CANCEL_TACK,
         RUDDER_TARGET,  // fval holds the target angle in degrees
-        RUDDER_STOP
+        RUDDER_STOP,
+        RUDDER_JOG      // fval holds the servo speed (+/-0.5); manual, disengaged only
     } type;
     float fval  = 0.0f;
     char  sval[16] = {};
@@ -64,6 +65,10 @@ inline bool pypilot_cmd_rudder_target(float target) {
 }
 inline bool pypilot_cmd_rudder_stop() {
     PylotCmd c{}; c.type = PylotCmd::Type::RUDDER_STOP;
+    return xQueueSend(gCmdQueue, &c, 0) == pdTRUE;
+}
+inline bool pypilot_cmd_rudder_jog(float speed) {
+    PylotCmd c{}; c.type = PylotCmd::Type::RUDDER_JOG; c.fval = speed;
     return xQueueSend(gCmdQueue, &c, 0) == pdTRUE;
 }
 

@@ -13,6 +13,8 @@ class NetWebServer {
     void handlePreferences();
     void handleUpdatePreferences();
     void handleRestart();
+    void handleFirmwarePage();
+    void handleFirmwareUpload();
 
     String getFullUri(const String &path) const;
 

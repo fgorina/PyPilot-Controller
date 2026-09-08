@@ -102,13 +102,17 @@ void BleServer::_handleCommand(const std::string &cmd) {
             pypilot_cmd_tack_port();
     } else if (s == 'X') {
         pypilot_cmd_cancel_tack();
+    } else if (s == 'R') {
+        // Manual rudder jog (disengaged only): 'RP' = port (+), else starboard (-)
+        float speed = (cmd.size() > 1 && cmd[1] == 'P') ? 0.5f : -0.5f;
+        pypilot_cmd_rudder_jog(speed);
     } else if (s == 'Z') {
         // Rudder target: "Z-5.0"  or just "Z" for centre
         float target = (cmd.size() > 1) ? atof(cmd.substr(1).c_str()) : 0.0f;
         pypilot_cmd_rudder_target(target);
     } else if (s == 'I') {
-        // Sync request — notifyAll will be called next loop iteration
-        // (no direct State access here; main loop handles it)
+        // Full-state sync request — force an immediate notifyAll from the loop.
+        _syncRequested = true;
     }
 }
 

@@ -2,6 +2,9 @@
 #include <ESPmDNS.h>
 #include <lwip/sockets.h>
 
+// Rudder travel limit for the manual jog (degrees); matches RudderScreen.
+static constexpr float RUDDER_LIMIT = 30.0f;
+
 // --- Low-level send helpers (all run inside netPylotTask on core 1) -----------
 
 static void tcp_greet(WiFiClient &c) {
@@ -166,6 +169,14 @@ void netPylotTask(void *param) {
                 case PylotCmd::Type::RUDDER_STOP:
                     tcp_rudder_speed(client, 0.0f);
                     state.updateRudder = false;
+                    break;
+                case PylotCmd::Type::RUDDER_JOG:
+                    // Manual rudder move — only while the autopilot is disengaged,
+                    // and only up to the travel limit in the requested direction.
+                    if (state.apState != ApState::ENGAGED &&
+                        ((cmd.fval > 0 && state.rudderAngle <  (RUDDER_LIMIT - 1.0f)) ||
+                         (cmd.fval < 0 && state.rudderAngle > -(RUDDER_LIMIT - 1.0f))))
+                        tcp_rudder_speed(client, cmd.fval);
                     break;
             }
         }

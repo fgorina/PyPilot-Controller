@@ -301,6 +301,15 @@ void loop() {
 
   auto &t = M5.Touch.getDetail(0);
 
+  // BLE notify — must run regardless of display-saver state, otherwise the
+  // Watch gets no answers while the screen is asleep.
+  unsigned long now = millis();
+  if (bleServer && bleServer->isConnected() &&
+      (bleServer->consumeSyncRequest() || now - lastBleNotify > BLE_NOTIFY_MS)) {
+    bleServer->notifyAll(state);
+    lastBleNotify = now;
+  }
+
   // Display saver
   if (M5.Touch.getCount() > 0 && (t.wasPressed() || t.wasReleased()))
     lastTouched = millis();
@@ -336,14 +345,6 @@ void loop() {
     int next = currentScreen->run(t, state);
     if (next >= 0 && next < (int)screens.size())
       switchTo(next);
-  }
-
-  // BLE periodic notify
-  unsigned long now = millis();
-  if (bleServer && bleServer->isConnected() &&
-      now - lastBleNotify > BLE_NOTIFY_MS) {
-    bleServer->notifyAll(state);
-    lastBleNotify = now;
   }
 
   vTaskDelay(pdMS_TO_TICKS(20));

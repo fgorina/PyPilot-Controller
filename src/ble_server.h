@@ -25,11 +25,19 @@ public:
 
     bool isConnected() const { return _connected; }
 
+    // Returns true once if the central asked for a full-state sync ("I").
+    bool consumeSyncRequest() {
+        if (!_syncRequested) return false;
+        _syncRequested = false;
+        return true;
+    }
+
 private:
     AppConfig           *_config;
     void               (*_onSave)();
     BLECharacteristic  *_stateChr = nullptr;
     bool                _connected = false;
+    volatile bool       _syncRequested = false;
 
     // Singleton pointer used by static BLE callbacks
     static BleServer *_instance;
